@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+message EgoInfo
+{
+    float vel = 1;
+    float min_acc = 2;
+    float max_acc = 3;
+    float max_vel = 4;
+};

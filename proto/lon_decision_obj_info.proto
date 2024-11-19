@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+enum LonDecisionScene
+{
+    LON_DECISION_SCENE_UNKNOWN = 0;
+    LON_DECISION_SCENE_FOLLOW = 1;
+    LON_DECISION_SCENE_MERGE = 2;
+    LON_DECISION_SCENE_MERGE_LANE_CHANGE = 3;
+    LON_DECISION_SCENE_CROSS = 4;
+    LON_DECISION_SCENE_OTHER = 5;
+    LON_DECISION_SCENE_NUM = 6;
+};
+
+enum LonDecisionType
+{
+    LON_DECISION_NONE = 0;
+    LON_DECISION_OVERTAKE = 1;
+    LON_DECISION_IGNORE = 2;
+    LON_DECISION_FOLLOW = 3;
+    LON_DECISION_NUM = 4;
+};
+
+enum ObjPriority
+{
+    OBJ_PRIORITY_UNKNOWN = 0;
+    OBJ_PRIORITY_LOW = 1;
+    OBJ_PRIORITY_EQUAL = 2;
+    OBJ_PRIORITY_HIGH = 3;
+    OBJ_PRIORITY_NUM = 4;
+};
+
+message ObjInfo
+{
+    int32   id = 1;
+    int32   obj_id = 2;
+    float   length = 3;
+    float   width = 4;
+    float   vel = 5;
+    float   max_vel = 6;
+    float   min_acc = 7;
+    float   max_acc = 8;
+    float   intersection_limit_vel = 9;
+    float   intersection_start_s = 10;
+    float   intersection_end_s = 11;
+    float   dist_to_intersection = 12;
+    float   dist_to_leave_intersection = 13;
+
+    LonDecisionScene    scene = 14;
+    LonDecisionType     decision = 15;
+    LonDecisionType     history_decision = 16;
+    ObjPriority         priority = 17;
+
+    int32               orig_obj_id = 18;
+};
+
+message ObjSet
+{
+    bool             normal_decision = 1;
+    repeated ObjInfo obj_info = 2;
+}

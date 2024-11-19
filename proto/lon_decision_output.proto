@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+import "lon_decision_result.proto";
+
+message LonDecisionOutput
+{
+    int32               frame_idx = 1;
+    LonDecisionResult   lon_decision_result = 2;
+}

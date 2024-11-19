@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+message Pos
+{
+    double x = 1;
+    double y = 2;
+};
+
+message Pose
+{
+    Pos pos = 1;
+    double theta = 2;
+};
+
+message Point3d
+{
+    double x = 1;
+    double y = 2;
+    double z = 3;
+};
+
+message Trajectory
+{
+    repeated Pose pose = 1;
+};
+
+message Polygon
+{
+    repeated Point3d vertex = 1;
+};
+
+message Lane_Node
+{
+    Pose pose = 1;
+};
+
+message Lane
+{
+    repeated Lane_Node  node = 1;
+    double              lane_width = 2;
+};
+
+message Local_Map
+{
+    repeated Lane lane = 1;
+};
+
+message EgoExtraInfo
+{
+    Pose                        ego_pose = 1;
+    Polygon                     ego_polygon = 2;
+    Trajectory                  ego_traj = 3;
+};
+
+message ObjExtraInfo
+{
+    int32       obj_orig_id = 1;
+    Pose        obj_pose = 2;
+    Polygon     obj_polygon = 3;
+    Trajectory  obj_traj = 4;
+};
+
+message ObjExtraInfoSet
+{
+    repeated ObjExtraInfo obj_extra_info = 1;
+};
+
+message LonDecisionExtraInfo
+{
+    EgoExtraInfo        ego_extra_info = 1;
+    Local_Map           local_map = 2;
+    ObjExtraInfoSet     obj_extra_info_set = 3;
+};

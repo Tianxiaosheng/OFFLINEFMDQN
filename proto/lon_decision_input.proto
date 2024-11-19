@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+import "lon_decision_ego_info.proto";
+import "lon_decision_obj_info.proto";
+import "lon_decision_result.proto";
+import "lon_decision_extra_info.proto";
+
+message LonDecisionInput
+{
+    EgoInfo                 ego_info = 1;
+    ObjSet                  obj_set = 2;
+    LonDecisionResult       lon_decision_result = 3;
+    LonDecisionExtraInfo    extra_info = 4;
+};

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package lon_decision_proto;
+
+import "lon_decision_obj_info.proto";
+
+message ObjDecisionResult
+{
+    int32           orig_obj_id = 1;
+    LonDecisionType decision = 2;
+}
+
+message LonDecisionResult
+{
+    repeated ObjDecisionResult obj_decision_result = 1;
+}
