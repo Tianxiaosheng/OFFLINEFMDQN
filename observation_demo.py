@@ -23,7 +23,7 @@ def main():
                      offline_RL_data_path=file_path)
     if agent.deserialization.get_lon_decision_inputs_size() > 297:
         agent.get_observation_from_lon_decision_input(agent.deserialization.get_lon_decision_input_by_frame(296))
-        # agent.ogm.dump_ogm_graphs()
+        agent.ogm.dump_ogm_graphs()
     else:
         print("No lon decision inputs found")
 

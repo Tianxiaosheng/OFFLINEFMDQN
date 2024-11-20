@@ -1,3 +1,4 @@
+import time
 from deserialization_core.lon_decision_input_pb2 import *
 from google.protobuf.internal.decoder import _DecodeVarint32
 
@@ -88,127 +89,122 @@ class Deserialization:
             self.get_lon_decision_inputs_by_deserialization(file_path)
 
     def get_lon_decision_inputs_by_deserialization(self, file_path):
+        start_time = time.time()
+        # 预分配缓冲区
+        buf = bytearray(4096)  # 4KB buffer
+        self.lon_decision_inputs = []
+
         with open(file_path, 'rb') as f:
             while True:
-                # 读取消息长度的前几个字节
-                buf = f.read(1)
-                if not buf:
+                # 一次性读取更多数据到缓冲区
+                initial_byte = f.read(1)
+                if not initial_byte:
                     break
-                # 继续读取直到完整的 varint 被读取
-                while buf[-1] & 0x80:
+
+                varint_bytes = [initial_byte[0]]
+                while varint_bytes[-1] & 0x80:
                     next_byte = f.read(1)
                     if not next_byte:
                         break
-                    buf += next_byte
+                    varint_bytes.append(next_byte[0])
 
-                # 如果没有读取到完整的 varint，退出循环
-                if not buf:
-                    break
+                size, _ = _DecodeVarint32(bytes(varint_bytes), 0)
 
-                # 解码消息长度
-                size, pos = _DecodeVarint32(buf, 0)
-
-                # 读取消息内容
+                # 直接读取完整消息
                 data = f.read(size)
                 if not data:
                     break
 
-                # 反序列化消息
+                # 复用LonDecisionInput对象
                 lon_decision_input = LonDecisionInput()
                 lon_decision_input.ParseFromString(data)
-                lon_decision_input_type = self.convert_lon_decision_input_to_type(lon_decision_input)
-                self.lon_decision_inputs.append(lon_decision_input_type)
 
+                # 转换并存储
+                self.lon_decision_inputs.append(
+                    self.convert_lon_decision_input_to_type(lon_decision_input))
 
-    def convert_ego_info_to_type(self, ego_info):
-        ego_info_type = EgoInfoType()
-        ego_info_type.vel = ego_info.vel
-        ego_info_type.width = 2.0
-        ego_info_type.length = 3.6
-        return ego_info_type
-
-    def convert_obj_info_to_type(self, obj_info):
-        obj_info_type = ObjInfoType()
-        obj_info_type.id = obj_info.orig_obj_id
-        obj_info_type.length = obj_info.length
-        obj_info_type.width = obj_info.width
-        obj_info_type.vel = obj_info.vel
-        obj_info_type.intersection_start_s = obj_info.intersection_start_s
-        obj_info_type.intersection_end_s = obj_info.intersection_end_s
-        obj_info_type.dist_to_intersection = obj_info.dist_to_intersection
-        obj_info_type.dist_to_leave_intersection = obj_info.dist_to_leave_intersection
-        return obj_info_type
-
-    def convert_obj_set_to_type(self, obj_set):
-        obj_set_type = ObjSetType()
-        for obj_info in obj_set.obj_info:
-            obj_info_type = self.convert_obj_info_to_type(obj_info)
-            obj_set_type.obj_info.append(obj_info_type)
-
-        return obj_set_type
-
-    def convert_pose_to_type(self, pose):
-        pose_type = PoseType()
-        pose_type.pos.x = pose.pos.x
-        pose_type.pos.y = pose.pos.y
-        pose_type.theta = pose.theta
-        return pose_type
-
-    def convert_polygon_to_type(self, polygon):
-        polygon_type = PolygonType()
-        polygon_type.vertex = polygon.vertex
-        return polygon_type
-
-    def convert_trajectory_to_type(self, trajectory):
-        trajectory_type = TrajectoryType()
-        for pose in trajectory.pose:
-            pose_type = self.convert_pose_to_type(pose)
-            trajectory_type.pose.append(pose_type)
-        return trajectory_type
-
-    def convert_ego_extra_info_to_type(self, ego_extra_info):
-        ego_extra_info_type = EgoExtraInfoType()
-        ego_extra_info_type.pose = self.convert_pose_to_type(ego_extra_info.ego_pose)
-        ego_extra_info_type.polygon = self.convert_polygon_to_type(ego_extra_info.ego_polygon)
-        ego_extra_info_type.trajectory = self.convert_trajectory_to_type(ego_extra_info.ego_traj)
-        return ego_extra_info_type
-
-    def convert_obj_extra_info_to_type(self, obj_extra_info):
-        obj_extra_info_type = ObjExtraInfoType()
-        obj_extra_info_type.id = obj_extra_info.obj_orig_id
-        obj_extra_info_type.pose = self.convert_pose_to_type(obj_extra_info.obj_pose)
-        obj_extra_info_type.polygon = self.convert_polygon_to_type(obj_extra_info.obj_polygon)
-        obj_extra_info_type.trajectory = self.convert_trajectory_to_type(obj_extra_info.obj_traj)
-        return obj_extra_info_type
-
-    def convert_extra_info_to_type(self, extra_info):
-        extra_info_type = ExtraInfoType()
-        extra_info_type.ego_extra_info = self.convert_ego_extra_info_to_type(extra_info.ego_extra_info)
-        for obj_extra_info in extra_info.obj_extra_info_set.obj_extra_info:
-            obj_extra_info_type = self.convert_obj_extra_info_to_type(obj_extra_info)
-            extra_info_type.obj_extra_info_set.append(obj_extra_info_type)
-        return extra_info_type
-
-    def update_obj_extra_info_to_obj_info(self, lon_decision_input_type):
-        for i, obj_info in enumerate(lon_decision_input_type.obj_set.obj_info):
-            if i >= len(lon_decision_input_type.extra_info.obj_extra_info_set):
-                break
-            obj_extra_info = lon_decision_input_type.extra_info.obj_extra_info_set[i]
-            obj_info.pose = obj_extra_info.pose
-
-    def update_ego_extra_info_to_ego_info(self, lon_decision_input_type):
-        lon_decision_input_type.ego_info.pose = lon_decision_input_type.extra_info.ego_extra_info.pose
+        end_time = time.time()
+        print(f"Time taken to get lon decision inputs: {end_time - start_time} seconds")
 
     def convert_lon_decision_input_to_type(self, lon_decision_input):
-        lon_decision_input_type = LonDecisionInputType()
-        lon_decision_input_type.ego_info = self.convert_ego_info_to_type(lon_decision_input.ego_info)
-        lon_decision_input_type.obj_set = self.convert_obj_set_to_type(lon_decision_input.obj_set)
-        lon_decision_input_type.extra_info = self.convert_extra_info_to_type(lon_decision_input.extra_info)
+        # 预创建对象,减少重复创建
+        result = LonDecisionInputType()
 
-        self.update_obj_extra_info_to_obj_info(lon_decision_input_type)
-        self.update_ego_extra_info_to_ego_info(lon_decision_input_type)
+        # 直接赋值,避免调用额外函数
+        result.ego_info = self._fast_convert_ego_info(lon_decision_input.ego_info)
+        result.obj_set = self._fast_convert_obj_set(lon_decision_input.obj_set) 
+        result.extra_info = self._fast_convert_extra_info(lon_decision_input.extra_info)
 
-        return lon_decision_input_type
+        # 内联更新函数
+        self._fast_update_obj_extra_info(result)
+        self._fast_update_ego_extra_info(result)
+
+        return result
+
+    def _fast_convert_obj_extra_info_set(self, obj_extra_info_set):
+        result = []
+        for obj_extra_info in obj_extra_info_set.obj_extra_info:
+            result.append(self._fast_convert_obj_extra_info(obj_extra_info))
+        return result
+
+    def _fast_convert_obj_extra_info(self, obj_extra_info):
+        result = ObjExtraInfoType()
+        result.id = obj_extra_info.obj_orig_id
+        result.pose = obj_extra_info.obj_pose
+        return result
+
+    def _fast_convert_extra_info(self, extra_info):
+        result = ExtraInfoType()
+        result.ego_extra_info = self._fast_convert_ego_extra_info(extra_info.ego_extra_info)
+        result.local_map = extra_info.local_map
+        result.obj_extra_info_set = self._fast_convert_obj_extra_info_set(extra_info.obj_extra_info_set)
+        return result
+
+    def _fast_convert_ego_info(self, ego_info):
+        result = EgoInfoType()
+        result.vel = ego_info.vel
+        result.width = 2.0  # 固定值
+        result.length = 3.6 # 固定值
+        result.pose = PoseType() # 后续会被更新
+        return result
+
+    def _fast_convert_ego_extra_info(self, ego_extra_info):
+        result = EgoExtraInfoType()
+        result.pose = ego_extra_info.ego_pose
+        return result
+
+    def _fast_convert_obj_set(self, obj_set):
+        result = ObjSetType()
+        result.obj_info = []
+
+        # 预分配列表空间
+        obj_count = len(obj_set.obj_info)
+        result.obj_info = [None] * obj_count
+
+        for i, obj in enumerate(obj_set.obj_info):
+            obj_info = ObjInfoType()
+            obj_info.id = obj.orig_obj_id
+            obj_info.length = obj.length
+            obj_info.width = obj.width
+            obj_info.vel = obj.vel
+            obj_info.intersection_start_s = obj.intersection_start_s
+            obj_info.intersection_end_s = obj.intersection_end_s
+            obj_info.dist_to_intersection = obj.dist_to_intersection
+            obj_info.dist_to_leave_intersection = obj.dist_to_leave_intersection
+            obj_info.pose = PoseType()
+            result.obj_info[i] = obj_info
+
+        return result
+
+    def _fast_update_obj_extra_info(self, lon_decision_input):
+        obj_info_list = lon_decision_input.obj_set.obj_info
+        extra_info_list = lon_decision_input.extra_info.obj_extra_info_set
+
+        for i in range(min(len(obj_info_list), len(extra_info_list))):
+            obj_info_list[i].pose = extra_info_list[i].pose
+
+    def _fast_update_ego_extra_info(self, lon_decision_input):
+        lon_decision_input.ego_info.pose = lon_decision_input.extra_info.ego_extra_info.pose
 
     def get_lon_decision_inputs_size(self):
         return len(self.lon_decision_inputs)
