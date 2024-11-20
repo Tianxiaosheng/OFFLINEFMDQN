@@ -8,12 +8,11 @@ import torch.optim as optim
 import random
 from collections import deque, namedtuple       # 队列类型
 import matplotlib.pyplot as plt
-
-from smarts.core.agent import Agent
-from planner_base import PlanerBase
 import time
 from scipy.signal import savgol_filter
-import ogm
+import FMDQN_core.ogm as ogm
+import deserialization_core.deserialization
+
 
 EVA_PATH = "./examples/lon_plan_agent/eva_model_net.pth"
 TARGET_PATH = "./examples/lon_plan_agent/target_model_net.pth"
@@ -63,8 +62,8 @@ class FMDQNNet(nn.Module):
 
         pool2_output_size = int(filter2_size * int(conv2_height / 2) *
                                int(conv2_width / 2))
-        print("conv2_height{}, conv2_width{}, pool2_output_size{}, hidden1_size{}, hidden2_size{}, output_size{}".format(
-                conv2_height, conv2_width, pool2_output_size, hidden1_size, hidden2_size, output_size))
+        # print("conv2_height{}, conv2_width{}, pool2_output_size{}, hidden1_size{}, hidden2_size{}, output_size{}".format(
+        #         conv2_height, conv2_width, pool2_output_size, hidden1_size, hidden2_size, output_size))
 
         self.conv_block = nn.Sequential(
             nn.Conv2d(intput_channel_size, filter1_size, filter_width),
@@ -100,12 +99,13 @@ class FMDQNNet(nn.Module):
         return num_features
 
 # 定义DQNAgent类
-class DQNAgent(Agent):
+class DQNAgent:
     def __init__(self, net_kwargs={}, gamma=0.9, epsilon=0.05,\
-                 batch_size=64, observation_dim=(4, 67, 133), action_size=3):
+                 batch_size=64, observation_dim=(4, 67, 133), action_size=3,
+                 offline_RL_data_path=None):
         # action_size == 3,  0: -1m/s, 1: 0, 2: +1m/s
         super().__init__()
-        self.planerbase = PlanerBase(100.0, 100.0)
+        self.offline_RL_data_path = offline_RL_data_path
         self.observation_dim = observation_dim
         self.action_n = action_size
         self.gamma = gamma
@@ -117,6 +117,7 @@ class DQNAgent(Agent):
         delta_y = 1.0
         self.render = False
         self.ogm = ogm.OccupancyGrid(self.observation_dim, delta_x=delta_x, delta_y=delta_y, render=self.render)
+        self.deserialization = deserialization_core.deserialization.Deserialization(offline_RL_data_path)
 
         # 初始化评估网络和目标网络  
         self.evaluate_net = FMDQNNet(input_dim=self.observation_dim,
@@ -182,49 +183,35 @@ class DQNAgent(Agent):
 
         return action
 
-    def convert_observation(self, observation):
-        ego_pos = observation["ego_vehicle_state"]["position"]
-        ego_heading = observation["ego_vehicle_state"]["heading"] + math.pi / 2.0
-        if ego_heading < 0.0:
-            ego_heading += 2.0 * math.pi
-        ego_bounding_box = observation["ego_vehicle_state"]["box"]
-        ego_dist_to_cli = self.planerbase.calc_dist_to_cli_pt(ego_pos,\
-                ego_heading)
-        ego_vel = observation["ego_vehicle_state"]["speed"]
+    def get_observation_from_lon_decision_input(self, lon_decision_input):
+        ego_pos = self.deserialization.get_ego_position_from_lon_decision_input(lon_decision_input)
+        ego_pos = [ego_pos.x, ego_pos.y]
+        ego_heading = self.deserialization.get_ego_heading_from_lon_decision_input(lon_decision_input)
 
-        self.ogm.preprocess_occupancy_grid(ego_pos[:2], ego_heading)
-        self.ogm.update_occupancy_grid(ego_pos[:2], ego_heading, ego_vel, \
-                                       ego_bounding_box[:2], 0.0)
+        width = self.deserialization.get_ego_width_from_lon_decision_input(lon_decision_input)
+        length = self.deserialization.get_ego_length_from_lon_decision_input(lon_decision_input)
+        ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input(lon_decision_input)
+        ego_bounding_box = [length, width]
+
+        self.ogm.preprocess_occupancy_grid(ego_pos, ego_heading)
+        self.ogm.update_occupancy_grid(ego_pos, ego_heading, ego_vel, \
+                                       ego_bounding_box, 0.0)
         bird_eye_valid_dist = self.ogm.width * self.ogm.delta_x / 2.0
 
-        objs =observation.get("neighborhood_vehicle_states", [])
-        if objs and (ego_dist_to_cli < bird_eye_valid_dist and ego_dist_to_cli > 0.0):
-            position = observation["neighborhood_vehicle_states"]["position"]
-            heading = observation["neighborhood_vehicle_states"]["heading"]
-            speed = observation["neighborhood_vehicle_states"]["speed"]
-            id = observation["neighborhood_vehicle_states"]["id"]
-            bounding_box = observation["neighborhood_vehicle_states"]["box"]
+        for obj_idx, obj_info in enumerate(lon_decision_input.obj_set.obj_info):
+            dist = self.deserialization.get_obj_dtc_from_obj_info(obj_info)
+            if (dist >= 0) and (dist < bird_eye_valid_dist):
+                obj_pos = self.deserialization.get_obj_position_from_obj_info(obj_info)
+                obj_pos = [obj_pos.x, obj_pos.y]
+                obj_vel = self.deserialization.get_obj_vel_from_obj_info(obj_info)
+                obj_bounding_box = [self.deserialization.get_obj_length_from_obj_info(obj_info), \
+                                    self.deserialization.get_obj_width_from_obj_info(obj_info)]
+                obj_heading = self.deserialization.get_obj_heading_from_obj_info(obj_info)
+                if obj_heading < 0.0:
+                    obj_heading+=math.pi * 2.0
 
-            for i in range(len(id)):
-                if id[i]:
-                    dist = self.planerbase.calc_dist_to_cli_pt(position[i], heading[i])
-                    if (dist >= 0) and (dist < bird_eye_valid_dist):
-                        obj_pos = position[i]
-                        obj_vel = speed[i]
-                        obj_bounding_box = bounding_box[i]
-                        obj_heading = heading[i] + math.pi / 2.0
-                        if obj_heading < 0.0:
-                            obj_heading+=math.pi * 2.0
-
-                        self.ogm.update_occupancy_grid(obj_pos[:2], obj_heading, obj_vel, \
-                                                    obj_bounding_box[:2], dist)
-
-                        if dist < (bird_eye_valid_dist) and self.render:
-                            print('++++++++++++++++++obj_id{}+++++++++++++++++'.format(i))
-                            self.ogm.dump_ogm_graph(0)
-                            self.ogm.dump_ogm_graph(1)
-                            self.ogm.dump_ogm_graph(2)
-                            # self.ogm.dump_ogm_graph(3)
+                self.ogm.update_occupancy_grid(obj_pos, obj_heading, obj_vel, \
+                                                obj_bounding_box, dist)
 
         return self.ogm.grid
 
@@ -345,48 +332,29 @@ class DQNAgent(Agent):
         self.target_net.load_state_dict(torch.load(TARGET_PATH))
         self.target_net.eval()
 
-def play_qlearning(env, agent, repalymemory, episode, train=False, render=False):
+def fill_replay_memory(replay_memory, lon_decision_inputs: list):
+    for lon_decision_input in lon_decision_inputs:
+        state = lon_decision_input.ego_info.position
+        action = lon_decision_input.action
+        reward = lon_decision_input.reward
+        next_state = lon_decision_input.next_state
+        done = lon_decision_input.done
+        replay_memory.push(state, action, reward, next_state, done)
+    pass
+
+def play_qlearning(agent, repalymemory, episode, train=False, render=False):
     episode_reward = 0
-    ego_vel_sum = 0.0
-    ego_vel_mean = 0.0
-    observation, _ = env.reset()
-    obj_info_prev = [200, 0.0, 0.0, ""]
-    obj_info_prev = agent.planerbase.get_nearest_obj_info(observation, obj_info_prev)
-    ego_vel_prev = -1.0
     state = agent.convert_observation(observation)
-    ego_init_vel = agent.get_ego_vel_from_observation(observation)
 
-    episode.record_scenario(env.unwrapped.scenario_log)
-    if render:
-        start_time = time.time()
+    if len(repalymemory) < agent.batch_size:
+        print("repalymemory is not enough, please collect more data")
+        return
+
     while True:
-        action_converted, action = agent.act(state, ego_init_vel)
-        next_observation, reward, terminated, truncated, info = env.step(action_converted)
-        next_state = agent.convert_observation(next_observation)
-        reward = agent.calc_reward(next_observation)
-
-        # print("state:%{}, reward:{}".format(next_state, reward))
-
         repalymemory.push(state, action, reward, next_state, terminated)
-        ego_init_vel = agent.get_ego_vel_from_observation(next_observation)
-        episode_reward += reward
-        ego_vel_sum += ego_init_vel
-
-        # episode.record_step(observation, reward, terminated, truncated, info)
-
         if train:
-            if len(repalymemory) > agent.batch_size:
-                state_batch, action_batch, reward_batch, next_state_batch, done_batch = repalymemory.sample(agent.batch_size)
-                T_data = repalymemory.Transition(state_batch, action_batch, reward_batch, next_state_batch, done_batch)
-                agent.learn(T_data)
-        if terminated:
-            break
-        obj_info_prev = agent.planerbase.get_nearest_obj_info(next_observation, obj_info_prev)
-        state = next_state
+            state_batch, action_batch, reward_batch, next_state_batch, done_batch = repalymemory.sample(agent.batch_size)
+            T_data = repalymemory.Transition(state_batch, action_batch, reward_batch, next_state_batch, done_batch)
+            agent.learn(T_data)
 
-    ego_vel_mean = ego_vel_sum / agent.get_steps_from_observation(next_observation)
-    if render:
-        end_time = time.time()
-        print('episode_reward:{}, ego_vel_mean:{}, count:{}, time:{}'
-              .format(episode_reward, ego_vel_mean, agent.count, end_time-start_time))
     return episode_reward, ego_vel_mean

@@ -38,6 +38,9 @@ class ObjSetType:
 class EgoInfoType:
     def __init__(self):
         self.vel = 0.0
+        self.width = 0.0
+        self.length = 0.0
+        self.pose = PoseType()
 
 class Point3dType:
     def __init__(self):
@@ -78,9 +81,11 @@ class LonDecisionInputType:
 This class is used to deserialize the observation data from the protobuf file.
 """
 class Deserialization:
-    def __init__(self):
-        self.data_file = None
+    def __init__(self, file_path=None):
+        self.file_path = file_path
         self.lon_decision_inputs = []
+        if file_path is not None:
+            self.get_lon_decision_inputs_by_deserialization(file_path)
 
     def get_lon_decision_inputs_by_deserialization(self, file_path):
         with open(file_path, 'rb') as f:
@@ -114,9 +119,12 @@ class Deserialization:
                 lon_decision_input_type = self.convert_lon_decision_input_to_type(lon_decision_input)
                 self.lon_decision_inputs.append(lon_decision_input_type)
 
+
     def convert_ego_info_to_type(self, ego_info):
         ego_info_type = EgoInfoType()
         ego_info_type.vel = ego_info.vel
+        ego_info_type.width = 2.0
+        ego_info_type.length = 3.6
         return ego_info_type
 
     def convert_obj_info_to_type(self, obj_info):
@@ -231,6 +239,42 @@ class Deserialization:
 
     def get_ego_heading_from_ego_extra_info(self, ego_extra_info):
         return ego_extra_info.pose.theta
+
+    def get_ego_heading_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.pose.theta
+
+    def get_ego_position_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.pose.pos
+
+    def get_ego_vertex_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.polygon.vertex
+
+    def get_ego_vel_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.vel
+
+    def get_ego_width_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.width
+
+    def get_ego_length_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.length
+
+    def get_obj_position_from_obj_info(self, obj_info):
+        return obj_info.pose.pos
+
+    def get_obj_heading_from_obj_info(self, obj_info):
+        return obj_info.pose.theta
+
+    def get_obj_vel_from_obj_info(self, obj_info):
+        return obj_info.vel
+
+    def get_obj_width_from_obj_info(self, obj_info):
+        return obj_info.width
+
+    def get_obj_length_from_obj_info(self, obj_info):
+        return obj_info.length
+
+    def get_obj_dtc_from_obj_info(self, obj_info):
+        return obj_info.dist_to_intersection
 
     def dump_ego_info_by_frame(self, frame):
         ego_info = self.get_ego_info_by_frame(frame)

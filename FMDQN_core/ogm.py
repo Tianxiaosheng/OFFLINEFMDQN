@@ -1,8 +1,5 @@
 import math
 import numpy as np
-from typing import Tuple, List, Optional
-from scipy.spatial import cKDTree
-from common.geometry import normalize_angle
 
 def cvt_pose_local_to_global(local_pos_x, local_pos_y, local_pos_theta,
                              base_pos_x, base_pos_y, base_pos_theta):
@@ -56,8 +53,8 @@ def is_point_in_polygon(point, polygon):
 class OccupancyGrid:
     def __init__(self, shape_dim, delta_x, delta_y, render):
         self.shape_dim = shape_dim
-        self.channel = shape_dim[0]
-        self.height = shape_dim[1]  # (channel, hight, width)
+        self.channels = shape_dim[0]
+        self.height = shape_dim[1]  # (channels, hight, width)
         self.width = shape_dim[2]
         self.delta_x = delta_x
         self.delta_y = delta_y
@@ -74,14 +71,15 @@ class OccupancyGrid:
         self.center_y = ego_center[1] + dist * math.cos(ego_heading)
         self.heading = ego_heading % (2.0 * math.pi)
 
-        self.grid = np.zeros(self.shape_dim, dtype=float)
+        # self.grid = np.zeros(self.shape_dim, dtype=float)
+        self.grid = np.full(self.shape_dim, -1.0, dtype=float)
 
         if self.render:
             print("ego_x:{}, y:{}, th:{}, grid_global_x:{}, y:{}, th:{}".\
                   format(ego_center[0], ego_center[1], ego_heading, \
                          self.center_x, self.center_y, self.heading))
 
-    def update_occupancy_grid_by_obj(self, obj_center, obj_heading, obj_vel, bounding_box, obj_dist_to_cli):
+    def update_occupancy_grid(self, obj_center, obj_heading, obj_vel, bounding_box, obj_dist_to_cli):
         # Convert global pose of obj to local pose of grid
         obj_center_x, obj_center_y, heading_local = \
                 cvt_pose_global_to_local(obj_center[0], obj_center[1], obj_heading,\
@@ -137,6 +135,7 @@ class OccupancyGrid:
                     self.grid[0][y][x] = feature[0]
                     self.grid[1][y][x] = feature[1]
                     self.grid[2][y][x] = feature[2]
+                    self.grid[3][y][x] = feature[3]
 
     def dump_ogm_graph(self, channel):
         if channel == 0:
@@ -146,7 +145,7 @@ class OccupancyGrid:
         elif channel == 2:
             ch = 'obj_speed'
         elif channel == 3:
-            ch = 'route_heading'
+            ch = 'DTC'
         else:
             ch = 'None'
 
@@ -154,9 +153,7 @@ class OccupancyGrid:
         for row in reversed(self.grid[channel]):
             print(' '.join(str(int(cell)) for cell in row))
 
-# # 示例使用
-# ogm = OccupancyGrid((33, 66), 1.0, 1.0, (5.0, 5.0), math.pi / 4.0)
-# ogm.update_occupancy_grid((5.0, 5.0), math.pi / 4.0, 1, 1)
-# # 打印更新后的栅格地图（仅为示例） 
-# for row in reversed(ogm.grid):
-#     print(' '.join(str(int(cell)) for cell in row))
+
+    def dump_ogm_graphs(self):
+        for channel in range(self.channels):
+            self.dump_ogm_graph(channel)
