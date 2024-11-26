@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1blon_decision_ego_info.proto\x12\x12lon_decision_proto\"I\n\x07\x45goInfo\x12\x0b\n\x03vel\x18\x01 \x01(\x02\x12\x0f\n\x07min_acc\x18\x02 \x01(\x02\x12\x0f\n\x07max_acc\x18\x03 \x01(\x02\x12\x0f\n\x07max_vel\x18\x04 \x01(\x02\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1blon_decision_ego_info.proto\x12\x12lon_decision_proto\"_\n\x07\x45goInfo\x12\x0b\n\x03vel\x18\x01 \x01(\x02\x12\x14\n\x0cprev_cmd_acc\x18\x02 \x01(\x02\x12\x0f\n\x07min_acc\x18\x03 \x01(\x02\x12\x0f\n\x07max_acc\x18\x04 \x01(\x02\x12\x0f\n\x07max_vel\x18\x05 \x01(\x02\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'lon_decision_ego_info_pb2', globals())
@@ -21,5 +21,5 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   _EGOINFO._serialized_start=51
-  _EGOINFO._serialized_end=124
+  _EGOINFO._serialized_end=146
 # @@protoc_insertion_point(module_scope)

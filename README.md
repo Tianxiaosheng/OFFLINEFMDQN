@@ -19,3 +19,14 @@ pip install -r requirements.txt
 deserialization: tesing demo of feature 1 and 2
 ```bash
 python deserialization_demo.py  data/lon_decision_input_dump.ucrf
+
+2.2 observation_demo.py
+observation: tesing demo of feature 3
+```bash
+python observation_demo.py  data/lon_decision_input_dump.ucrf
+```
+2.3 lon_agent.py
+lon_agent: tesing demo of feature 4
+```bash
+python lon_agent.py  data/lon_decision_input_dump.ucrf-2.6w
+```

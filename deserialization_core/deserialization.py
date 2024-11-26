@@ -16,6 +16,16 @@ class TrajectoryType:
     def __init__(self):
         self.pose = []
 
+# 访问scene枚举值
+SCENE_UNKNOWN = 0
+SCENE_FOLLOW = 1
+SCENE_MERGE = 2
+SCENE_MERGE_LANE_CHANGE = 3
+SCENE_CROSS = 4
+SCENE_OTHER = 5
+
+LON_DECISION_MAX_SAFE_T = 10000
+
 class ObjInfoType:
     """
     This class is used to store the information of the object.
@@ -30,6 +40,7 @@ class ObjInfoType:
         self.dist_to_intersection = 0.0 # obj's dist to cli
         self.dist_to_leave_intersection = 0.0
         self.pose = PoseType()
+        self.scene = 0
 
 class ObjSetType:
     def __init__(self):
@@ -39,6 +50,8 @@ class ObjSetType:
 class EgoInfoType:
     def __init__(self):
         self.vel = 0.0
+        self.prev_cmd_acc = 0.0
+        self.max_vel = 0.0
         self.width = 0.0
         self.length = 0.0
         self.pose = PoseType()
@@ -85,11 +98,12 @@ class Deserialization:
     def __init__(self, file_path=None):
         self.file_path = file_path
         self.lon_decision_inputs = []
-        if file_path is not None:
-            self.get_lon_decision_inputs_by_deserialization(file_path)
+        # if file_path is not None:
+        #     self.get_lon_decision_inputs_by_deserialization(file_path)
 
-    def get_lon_decision_inputs_by_deserialization(self, file_path):
+    def get_lon_decision_inputs_by_deserialization(self):
         start_time = time.time()
+        file_path = self.file_path
         # 预分配缓冲区
         buf = bytearray(4096)  # 4KB buffer
         self.lon_decision_inputs = []
@@ -163,6 +177,8 @@ class Deserialization:
     def _fast_convert_ego_info(self, ego_info):
         result = EgoInfoType()
         result.vel = ego_info.vel
+        result.prev_cmd_acc = ego_info.prev_cmd_acc
+        result.max_vel = ego_info.max_vel
         result.width = 2.0  # 固定值
         result.length = 3.6 # 固定值
         result.pose = PoseType() # 后续会被更新
@@ -192,6 +208,7 @@ class Deserialization:
             obj_info.dist_to_intersection = obj.dist_to_intersection
             obj_info.dist_to_leave_intersection = obj.dist_to_leave_intersection
             obj_info.pose = PoseType()
+            obj_info.scene = obj.scene
             result.obj_info[i] = obj_info
 
         return result
@@ -205,6 +222,9 @@ class Deserialization:
 
     def _fast_update_ego_extra_info(self, lon_decision_input):
         lon_decision_input.ego_info.pose = lon_decision_input.extra_info.ego_extra_info.pose
+
+    def get_lon_decision_inputs(self):
+        return self.lon_decision_inputs
 
     def get_lon_decision_inputs_size(self):
         return len(self.lon_decision_inputs)
@@ -233,6 +253,9 @@ class Deserialization:
     def get_obj_heading_from_obj_extra_info(self, obj_extra_info):
         return obj_extra_info.pose.theta
 
+    def get_ego_info_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info
+
     def get_ego_heading_from_ego_extra_info(self, ego_extra_info):
         return ego_extra_info.pose.theta
 
@@ -247,6 +270,12 @@ class Deserialization:
 
     def get_ego_vel_from_lon_decision_input(self, lon_decision_input):
         return lon_decision_input.ego_info.vel
+
+    def get_ego_max_vel_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.max_vel
+
+    def get_ego_acc_from_lon_decision_input(self, lon_decision_input):
+        return lon_decision_input.ego_info.prev_cmd_acc
 
     def get_ego_width_from_lon_decision_input(self, lon_decision_input):
         return lon_decision_input.ego_info.width
@@ -271,6 +300,42 @@ class Deserialization:
 
     def get_obj_dtc_from_obj_info(self, obj_info):
         return obj_info.dist_to_intersection
+
+    def get_obj_dtlc_from_obj_info(self, obj_info):
+        return obj_info.dist_to_leave_intersection
+
+    def get_obj_scene_from_obj_info(self, obj_info):
+        return obj_info.scene
+
+    def get_obj_time_to_cli_from_obj_info(self, obj_info):
+        if (obj_info.vel == 0.0):
+            return LON_DECISION_MAX_SAFE_T
+        else:
+            return obj_info.dist_to_intersection / abs(obj_info.vel)
+
+    def get_obj_time_to_leave_cli_from_obj_info(self, obj_info):
+        if (obj_info.vel == 0.0):
+            return LON_DECISION_MAX_SAFE_T
+        else:
+            return obj_info.dist_to_leave_intersection / abs(obj_info.vel)
+
+    def get_ego_time_to_cli(self, obj_info, ego_info):
+        if (ego_info.vel == 0.0):
+            if (obj_info.intersection_start_s > 0.0):
+                return LON_DECISION_MAX_SAFE_T
+            else:
+                return 0.0
+        else:
+            return obj_info.intersection_start_s / abs(ego_info.vel)
+
+    def get_ego_time_to_leave_cli(self, obj_info, ego_info):
+        if (ego_info.vel == 0.0):
+            if (obj_info.intersection_end_s > 0.0):
+                return LON_DECISION_MAX_SAFE_T
+            else:
+                return 0.0
+        else:
+            return obj_info.intersection_end_s / abs(ego_info.vel)
 
     def dump_ego_info_by_frame(self, frame):
         ego_info = self.get_ego_info_by_frame(frame)

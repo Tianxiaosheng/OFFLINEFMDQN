@@ -9,23 +9,50 @@ from FMDQN_core.FMDQN import DQNAgent, DQNReplayer
 # sys.path.insert(0, str(SMARTS_REPO_PATH))
 
 def main():
-    # replay memory
-    replay_memory = DQNReplayer(capacity=100000)
-
     # DQN parameters
     file_path = sys.argv[1]
     net_kwargs = {'hidden_sizes' : [64, 64], 'learning_rate' : 0.0005}
     gamma=0.99
-    epsilon=0.06
+    epsilon=0.00
     batch_size=400
+    train = False
+    # Initialize agent
     agent = DQNAgent(net_kwargs, gamma, epsilon, batch_size,\
                      observation_dim=(4, 51, 101), action_size=3,
                      offline_RL_data_path=file_path)
-    if agent.deserialization.get_lon_decision_inputs_size() > 297:
-        agent.get_observation_from_lon_decision_input(agent.deserialization.get_lon_decision_input_by_frame(296))
-        agent.ogm.dump_ogm_graphs()
+
+    # Load UOS's deserialization data to replay memory
+    agent.load_replay_memory()
+
+    # get model's parameters from training or load from saved model
+    if train:
+        for epoch in range(num_epochs_training):
+            start_time = time.time()
+            play_qlearning(agent, train, render=True)
+            end_time = time.time()
+            print("epoch {} train time: {}".format(epoch, end_time - start_time))
+        # save nn model
+        agent.save_model_params()
+
     else:
-        print("No lon decision inputs found")
+        agent.load_model_params()
+
+    # frame = 125
+    # replay_memory = agent.replay_memory.get_frame(frame)
+    # print("frame: {}, action: {}, agent->action: {}".format(frame, replay_memory.action, agent.decide(replay_memory.state)))
+    # agent.ogm.dump_ogm_graphs(replay_memory.state)
+    # agent.replay_memory.print_frame(frame)
+
+    for frame, replay_memory in enumerate(agent.replay_memory.memory):
+        if (frame <= 130):
+            print("frame: {}, action: {}, agent->action: {}".format(frame, replay_memory.action, agent.decide(replay_memory.state)))
+            agent.ogm.dump_ogm_graphs(replay_memory.state)
+            agent.ogm.dump_ogm_graphs(replay_memory.next_state)
+            # agent.replay_memory.print_frame(frame)
+
+    print("len(replay_memory): ", len(agent.replay_memory))
+
+
 
 if __name__ == "__main__":
     main()

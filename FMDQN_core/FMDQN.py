@@ -2,20 +2,37 @@ import numpy as np
 np.random.seed(0)
 import math
 import pandas as pd
-import torch  
-import torch.nn as nn  
+import torch
+import torch.nn as nn
 import torch.optim as optim
 import random
 from collections import deque, namedtuple       # 队列类型
 import matplotlib.pyplot as plt
-import time
 from scipy.signal import savgol_filter
 import FMDQN_core.ogm as ogm
 import deserialization_core.deserialization
+import time
 
 
-EVA_PATH = "./examples/lon_plan_agent/eva_model_net.pth"
-TARGET_PATH = "./examples/lon_plan_agent/target_model_net.pth"
+EVA_PATH = "data/eva_model_net.pth"
+TARGET_PATH = "data/target_model_net.pth"
+
+# 访问scene枚举值
+SCENE_UNKNOWN = 0
+SCENE_FOLLOW = 1
+SCENE_MERGE = 2
+SCENE_MERGE_LANE_CHANGE = 3
+SCENE_CROSS = 4
+SCENE_OTHER = 5
+
+LON_DECISION_MAX_SAFE_T = 10000
+
+def normalize_neg(x):
+    return math.exp(-x) / (1 + math.exp(-x)) * 2
+
+def normalize_pos(x):
+    return (1 - math.exp(-math.pow(x / 2, 3))) /\
+            (1 + math.exp(-math.pow(x / 2, 3)))
 
 class DQNReplayer:
     def __init__(self, capacity):
@@ -25,7 +42,7 @@ class DQNReplayer:
         batch_data = random.sample(self.memory, batch_size)
         state, action, reward, next_state, done = zip(*batch_data)
         return state, action, reward, next_state, done
- 
+
     def push(self, *args):
         # *args: 把传进来的所有参数都打包起来生成元组形式
         # self.push(1, 2, 3, 4, 5)
@@ -34,6 +51,22 @@ class DQNReplayer:
  
     def __len__(self):
         return len(self.memory)
+
+    def print_frame(self, frame_index):
+        if frame_index < 0 or frame_index >= len(self.memory):
+            print("帧索引超出范围。")
+        else:
+            transition = list(self.memory)[frame_index]
+            print(f"帧 {frame_index}:=========================")
+            print(f"动作: {transition.action}")
+            print(f"奖励: {transition.reward}")
+            print(f"完成: {transition.done}")
+
+    def get_frame(self, frame_index):
+        if frame_index < 0 or frame_index >= len(self.memory):
+            print("帧索引超出范围。")
+        else:
+            return list(self.memory)[frame_index]
 
 # 定义DQN网络结构
 class FMDQNNet(nn.Module):
@@ -138,6 +171,12 @@ class DQNAgent:
         # 定义损失函数  
         self.criterion = nn.MSELoss()  
 
+        self.replay_memory = DQNReplayer(capacity=40000)
+
+    def load_replay_memory(self):
+        self.deserialization.get_lon_decision_inputs_by_deserialization()
+        self.fill_replay_memory(self.deserialization.get_lon_decision_inputs())
+
     def update_target_net(self):  
         self.target_net.load_state_dict(self.evaluate_net.state_dict())
 
@@ -167,7 +206,7 @@ class DQNAgent:
         l.backward()
         self.optimizer.step()
  
-        if transition_dict.done:
+        if self.count % 100 == 0:
             # copy model parameters
             self.target_net.load_state_dict(self.evaluate_net.state_dict())
  
@@ -214,6 +253,148 @@ class DQNAgent:
                                                 obj_bounding_box, dist)
 
         return self.ogm.grid
+
+    def get_action_from_lon_decision_inputs(self, lon_decision_inputs, frame):
+        if (frame < len(lon_decision_inputs)-1):
+            ego_info = self.deserialization.\
+                get_ego_info_from_lon_decision_input(lon_decision_inputs[frame+1])
+            if (ego_info.prev_cmd_acc >0.3):
+                return 2
+            elif (ego_info.prev_cmd_acc < -0.8):
+                return 0
+            else:
+                return 1
+        else:
+            return 1
+
+    def calc_safe_time_of_cross_obj(self, obj_info, ego_info):
+        obj_time_to_cli =\
+            self.deserialization.get_obj_time_to_cli_from_obj_info(obj_info)
+        obj_time_to_leave_cli = \
+            self.deserialization.get_obj_time_to_leave_cli_from_obj_info(obj_info)
+        ego_time_to_cli = \
+            self.deserialization.get_ego_time_to_cli(obj_info, ego_info)
+        ego_time_to_leave_cli = \
+            self.deserialization.get_ego_time_to_leave_cli(obj_info, ego_info)
+
+        if (ego_time_to_cli == LON_DECISION_MAX_SAFE_T or\
+                obj_time_to_cli == LON_DECISION_MAX_SAFE_T):
+            safe_time = LON_DECISION_MAX_SAFE_T
+        elif (obj_time_to_cli > ego_time_to_leave_cli or\
+                ego_time_to_cli > obj_time_to_leave_cli):
+            delta_time1 = abs(ego_time_to_cli - obj_time_to_leave_cli)
+            delta_time2 = abs(ego_time_to_leave_cli - obj_time_to_cli)
+            safe_time = min(delta_time1, delta_time2)
+        else:
+            safe_time = 0.0
+
+        return safe_time
+
+    def calc_safe_time_of_merge_obj(self, obj_info, ego_info):
+        obj_time_to_cli =\
+            self.deserialization.get_obj_time_to_cli_from_obj_info(obj_info)
+        obj_time_to_leave_cli = \
+            self.deserialization.get_obj_time_to_leave_cli_from_obj_info(obj_info)
+        ego_time_to_cli = \
+            self.deserialization.get_ego_time_to_cli(obj_info, ego_info)
+        ego_time_to_leave_cli = \
+            self.deserialization.get_ego_time_to_leave_cli(obj_info, ego_info)
+
+        if (ego_time_to_cli == LON_DECISION_MAX_SAFE_T or\
+                obj_time_to_cli == LON_DECISION_MAX_SAFE_T):
+            safe_time = LON_DECISION_MAX_SAFE_T
+        elif (obj_time_to_cli > ego_time_to_leave_cli or\
+                ego_time_to_cli > obj_time_to_leave_cli):
+            delta_time1 = abs(ego_time_to_cli - obj_time_to_leave_cli)
+            delta_time2 = abs(ego_time_to_leave_cli - obj_time_to_cli)
+            safe_time = min(delta_time1, delta_time2)
+        else:
+            safe_time = 0.0
+
+        return safe_time
+
+    def update_payoff_of_safety_bak(self, lon_decision_input):
+        k_c = 2000
+        min_safe_time = LON_DECISION_MAX_SAFE_T
+
+        ego_info = self.deserialization.get_ego_info_from_lon_decision_input(lon_decision_input)
+        for obj_info in lon_decision_input.obj_set.obj_info:
+            if (obj_info.scene == SCENE_CROSS):
+                safe_time = self.calc_safe_time_of_cross_obj(obj_info, ego_info)
+            elif (obj_info.scene == SCENE_MERGE or\
+                    obj_info.scene == SCENE_MERGE_LANE_CHANGE):
+                safe_time = self.calc_safe_time_of_merge_obj(obj_info, ego_info)
+            else:
+                safe_time = self.deserialization.get_ego_time_to_cli(obj_info, ego_info)
+
+            min_safe_time = min(min_safe_time, safe_time)
+
+        normalized_safe_time = -k_c * normalize_neg(min_safe_time)
+
+        return normalized_safe_time
+
+    def update_payoff_of_safety(self, lon_decision_input):
+        k_c = 2000
+        min_safe_time = LON_DECISION_MAX_SAFE_T
+
+        ego_info = self.deserialization.get_ego_info_from_lon_decision_input(lon_decision_input)
+        for obj_info in lon_decision_input.obj_set.obj_info:
+            if (self.deserialization.get_obj_dtc_from_obj_info(obj_info) < 0.5):
+                safe_time = self.deserialization.get_ego_time_to_cli(obj_info, ego_info)
+            else:
+                safe_time = LON_DECISION_MAX_SAFE_T
+
+            min_safe_time = min(min_safe_time, safe_time)
+
+        normalized_safe_time = -k_c * normalize_neg(min_safe_time)
+
+        return normalized_safe_time
+
+    def update_payoff_of_comfort(self, lon_decision_input):
+        k_a = 100
+        ego_acc = self.deserialization.get_ego_acc_from_lon_decision_input\
+                (lon_decision_input)
+        ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input\
+                (lon_decision_input)
+        if (ego_acc < 0.0 and ego_vel > 0.0):
+            normalized_ego_acc = normalize_pos(-ego_acc)
+            payoff_of_comfort = -k_a * normalized_ego_acc
+        else:
+            payoff_of_comfort = 0.0
+
+        return payoff_of_comfort
+
+    def update_payoff_of_efficiency(self, lon_decision_input):
+        k_e = 10
+
+        ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input\
+                (lon_decision_input)
+        ego_target_vel = self.deserialization.get_ego_max_vel_from_lon_decision_input\
+                (lon_decision_input)
+        if (ego_target_vel > 0.0):
+            payoff_of_efficiency = -k_e * abs(ego_vel - ego_target_vel) / ego_target_vel
+        else:
+            payoff_of_efficiency = 0.0
+
+        return payoff_of_efficiency
+
+    def update_reward(self, lon_decision_input):
+        payoff_of_safety = self.update_payoff_of_safety(lon_decision_input)
+        payoff_of_comfort = self.update_payoff_of_comfort(lon_decision_input)
+        payoff_of_efficiency = self.update_payoff_of_efficiency(lon_decision_input)
+        reward = payoff_of_safety + payoff_of_comfort + payoff_of_efficiency
+
+        return reward
+
+    def fill_replay_memory(self, lon_decision_inputs):
+        state = self.get_observation_from_lon_decision_input(lon_decision_inputs[0])
+        for frame in range(1, len(lon_decision_inputs), 1):
+            next_state = self.get_observation_from_lon_decision_input(lon_decision_inputs[frame])
+            action = self.get_action_from_lon_decision_inputs(lon_decision_inputs, frame)
+            reward = self.update_reward(lon_decision_inputs[frame-1])
+            done = False
+            self.replay_memory.push(state, action, reward, next_state, done)
+            state = next_state
 
     def normalize_state(self, state):
         ego_dist_to_cli = state[0]
@@ -332,29 +513,36 @@ class DQNAgent:
         self.target_net.load_state_dict(torch.load(TARGET_PATH))
         self.target_net.eval()
 
-def fill_replay_memory(replay_memory, lon_decision_inputs: list):
-    for lon_decision_input in lon_decision_inputs:
-        state = lon_decision_input.ego_info.position
-        action = lon_decision_input.action
-        reward = lon_decision_input.reward
-        next_state = lon_decision_input.next_state
-        done = lon_decision_input.done
-        replay_memory.push(state, action, reward, next_state, done)
-    pass
-
-def play_qlearning(agent, repalymemory, episode, train=False, render=False):
-    episode_reward = 0
-    state = agent.convert_observation(observation)
-
-    if len(repalymemory) < agent.batch_size:
+def play_qlearning(agent, train=False, render=False):
+    if len(agent.replay_memory) < agent.batch_size:
         print("repalymemory is not enough, please collect more data")
         return
 
-    while True:
-        repalymemory.push(state, action, reward, next_state, terminated)
-        if train:
-            state_batch, action_batch, reward_batch, next_state_batch, done_batch = repalymemory.sample(agent.batch_size)
-            T_data = repalymemory.Transition(state_batch, action_batch, reward_batch, next_state_batch, done_batch)
-            agent.learn(T_data)
+    # 计算训练的轮次
+    print("replay_memory size: {}, batch_size: {}".format(len(agent.replay_memory), agent.batch_size))
+    period = len(agent.replay_memory) // agent.batch_size
 
-    return episode_reward, ego_vel_mean
+    for _ in range(period):
+        if train:
+            start_time = time.time()
+            state_batch, action_batch, reward_batch, next_state_batch, done_batch = \
+                agent.replay_memory.sample(agent.batch_size)
+            T_data = agent.replay_memory.Transition(state_batch, action_batch, reward_batch, next_state_batch, done_batch)
+            agent.learn(T_data)
+            end_time = time.time()
+            print("period {} train time: {}".format(_, end_time - start_time))
+
+def decide_action_of_frame(agent, frame):
+    state = agent.replay_memory.get_frame(frame).state
+    action = agent.decide(state)
+    return action
+
+def replay_from_memory(agent):
+    totol_action = len(agent.replay_memory)
+    accuracy_action = 0
+    for frame in range(len(agent.replay_memory)):
+        action = decide_action_of_frame(agent, frame)
+        print("frame: {}, action: {}, agent->action: {}".format(frame, agent.replay_memory.get_frame(frame).action, action))
+        if action == agent.replay_memory.get_frame(frame).action:
+            accuracy_action += 1
+    print("accuracy_action: {} / {} = {}".format(accuracy_action, totol_action, accuracy_action / totol_action))

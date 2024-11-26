@@ -12,8 +12,8 @@ main()
     curr_path=$(pwd)
 
     cp $src_dir/*proto $curr_path/proto/
-    protoc --proto_path=$curr_path/proto/ --python_out=$curr_path/core/ $curr_path/proto/*.proto
-    cd $curr_path/core/ && sed -i -E 's/^import.*_pb/from . \0/' *.py
+    protoc --proto_path=$curr_path/proto/ --python_out=$curr_path/deserialization_core/ $curr_path/proto/*.proto
+    cd $curr_path/deserialization_core/ && sed -i -E 's/^import.*_pb/from . \0/' *.py
 }
 
 main $1
