@@ -319,6 +319,9 @@ class Deserialization:
         else:
             return obj_info.dist_to_leave_intersection / abs(obj_info.vel)
 
+    def get_obj_intersection_start_s_from_obj_info(self, obj_info):
+        return obj_info.intersection_start_s
+
     def get_ego_time_to_cli(self, obj_info, ego_info):
         if (ego_info.vel == 0.0):
             if (obj_info.intersection_start_s > 0.0):
@@ -336,6 +339,9 @@ class Deserialization:
                 return 0.0
         else:
             return obj_info.intersection_end_s / abs(ego_info.vel)
+
+    def get_ego_vel_from_ego_info(self, ego_info):
+        return ego_info.vel
 
     def dump_ego_info_by_frame(self, frame):
         ego_info = self.get_ego_info_by_frame(frame)

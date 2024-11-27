@@ -336,19 +336,29 @@ class DQNAgent:
     def update_payoff_of_safety(self, lon_decision_input):
         k_c = 2000
         min_safe_time = LON_DECISION_MAX_SAFE_T
+        mass = 1.0
+        max_risk_value = 0.0
+        risk_value = 0.0
 
         ego_info = self.deserialization.get_ego_info_from_lon_decision_input(lon_decision_input)
         for obj_info in lon_decision_input.obj_set.obj_info:
             if (self.deserialization.get_obj_dtc_from_obj_info(obj_info) < 0.5):
                 safe_time = self.deserialization.get_ego_time_to_cli(obj_info, ego_info)
-            else:
-                safe_time = LON_DECISION_MAX_SAFE_T
+                obj_vel = self.deserialization.get_obj_vel_from_obj_info(obj_info)
+                ego_vel = self.deserialization.get_ego_vel_from_ego_info(ego_info)
+                relative_vel = ego_vel - obj_vel
+                dist_to_obj = self.deserialization.get_obj_intersection_start_s_from_obj_info(obj_info)
+                if (relative_vel <= 0.0):
+                    risk_value = 0.0
+                elif (dist_to_obj <= 0.0):
+                    risk_value = 5.0
+                else:
+                    risk_value = mass * pow(relative_vel, 3) / (2 * dist_to_obj)
+                    risk_value = min(risk_value, 5.0)
+                max_risk_value = max(max_risk_value, risk_value)
 
-            min_safe_time = min(min_safe_time, safe_time)
-
-        normalized_safe_time = -k_c * normalize_neg(min_safe_time)
-
-        return normalized_safe_time
+        normalized_risk_value = -k_c * normalize_pos(max_risk_value)
+        return normalized_risk_value
 
     def update_payoff_of_comfort(self, lon_decision_input):
         k_a = 100
