@@ -44,10 +44,10 @@ def main():
     # agent.replay_memory.print_frame(frame)
 
     for frame, replay_memory in enumerate(agent.replay_memory.memory):
-        if (frame <= 130):
+        if (frame == 300):
             print("frame: {}, action: {}, agent->action: {}".format(frame, replay_memory.action, agent.decide(replay_memory.state)))
             agent.ogm.dump_ogm_graphs(replay_memory.state)
-            agent.ogm.dump_ogm_graphs(replay_memory.next_state)
+            # agent.ogm.dump_ogm_graphs(replay_memory.next_state)
             # agent.replay_memory.print_frame(frame)
 
     print("len(replay_memory): ", len(agent.replay_memory))

@@ -187,11 +187,19 @@ class DQNAgent:
         next_states = transition_dict.next_state
         dones = np.expand_dims(transition_dict.done, axis=-1) # 扩充维度
 
-        states = torch.tensor(states, dtype=torch.float).to(self.device)
-        actions = torch.tensor(actions, dtype=torch.int64).to(self.device)
-        rewards = torch.tensor(rewards, dtype=torch.float).to(self.device)
-        next_states = torch.tensor(next_states, dtype=torch.float).to(self.device)
-        dones = torch.tensor(dones, dtype=torch.float).to(self.device)
+        # 优化前的代码:
+        # states = torch.tensor(states, dtype=torch.float).to(self.device)
+        # actions = torch.tensor(actions, dtype=torch.int64).to(self.device)
+        # rewards = torch.tensor(rewards, dtype=torch.float).to(self.device)
+        # next_states = torch.tensor(next_states, dtype=torch.float).to(self.device)
+        # dones = torch.tensor(dones, dtype=torch.float).to(self.device)
+
+        # 优化后的代码:
+        states = torch.from_numpy(np.array(states)).float().to(self.device)
+        actions = torch.from_numpy(actions).long().to(self.device)
+        rewards = torch.from_numpy(rewards).float().to(self.device)
+        next_states = torch.from_numpy(np.array(next_states)).float().to(self.device)
+        dones = torch.from_numpy(dones).float().to(self.device)
 
         predict_q_values = self.evaluate_net(states).gather(1, actions)
 
@@ -258,9 +266,9 @@ class DQNAgent:
         if (frame < len(lon_decision_inputs)-1):
             ego_info = self.deserialization.\
                 get_ego_info_from_lon_decision_input(lon_decision_inputs[frame+1])
-            if (ego_info.prev_cmd_acc >0.3):
+            if (ego_info.prev_cmd_acc > 0.3):
                 return 2
-            elif (ego_info.prev_cmd_acc < -0.8):
+            elif (ego_info.prev_cmd_acc < -0.5):
                 return 0
             else:
                 return 1
@@ -367,7 +375,7 @@ class DQNAgent:
         ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input\
                 (lon_decision_input)
         if (ego_acc < 0.0 and ego_vel > 0.0):
-            normalized_ego_acc = normalize_pos(-ego_acc)
+            normalized_ego_acc = normalize_pos(min(-ego_acc, 5.0))
             payoff_of_comfort = -k_a * normalized_ego_acc
         else:
             payoff_of_comfort = 0.0

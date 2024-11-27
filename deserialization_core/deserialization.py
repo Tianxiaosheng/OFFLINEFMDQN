@@ -345,12 +345,12 @@ class Deserialization:
 
     def dump_ego_info_by_frame(self, frame):
         ego_info = self.get_ego_info_by_frame(frame)
-        print(f"[frame {frame}]ego_info.vel: {ego_info.vel}m/s, ego_pose: {ego_info.pose.pos.x}, {ego_info.pose.pos.y}, ego_heading: {ego_info.pose.theta}")
+        print(f"[frame {frame}]ego_info.vel: {ego_info.vel}m/s, acc: {ego_info.prev_cmd_acc}m/s^2, ego_heading: {ego_info.pose.theta}")
 
     def dump_obj_info_by_frame(self, frame):
         obj_set = self.get_obj_set_by_frame(frame)
         print(f"[obj_size {len(obj_set.obj_info)}]")
         i = 0
         for obj_info in obj_set.obj_info:
-            print(f"obj_info[{i}].id: {obj_info.id}, vel: {obj_info.vel}m/s, dtc: {obj_info.dist_to_intersection}m, obj_pose: {obj_info.pose.pos.x}, {obj_info.pose.pos.y}, heading: {obj_info.pose.theta}")
+            print(f"obj_info[{i}].id: {obj_info.id}, vel: {obj_info.vel}m/s, dtc: {obj_info.dist_to_intersection}m, inters_start_s: {obj_info.intersection_start_s}m, heading: {obj_info.pose.theta}")
             i += 1

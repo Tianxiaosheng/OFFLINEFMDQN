@@ -28,8 +28,9 @@ def main(num_epochs_training, train=False):
             play_qlearning(agent, train, render=True)
             end_time = time.time()
             print("epoch {} train time: {}".format(epoch, end_time - start_time))
-        # save nn model
-        agent.save_model_params()
+            # save nn model
+            if (epoch % 100 == 0):
+                agent.save_model_params()
 
     else:
         agent.load_model_params()
