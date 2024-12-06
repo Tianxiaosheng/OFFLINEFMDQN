@@ -128,10 +128,8 @@ class OccupancyGrid:
                 # Check if the current cell is within the rotated rectangle
                 if is_point_in_polygon((x * self.delta_x, y * self.delta_y), rotated_corners):
                     # feature [occupancy_status, obj_heading, obj_speeding, dist_to_cli]
-                    self.grid[0][y][x] = feature[0]
-                    self.grid[1][y][x] = feature[1]
-                    self.grid[2][y][x] = feature[2]
-                    self.grid[3][y][x] = feature[3]
+                    for ch in range(self.channels):
+                        self.grid[ch][y][x] = feature[ch]
 
     def dump_ogm_graph(self, grid, channel):
         if channel == 0:
@@ -148,7 +146,6 @@ class OccupancyGrid:
         print('------------------------{}---------------------------'.format(ch))
         for row in reversed(grid[channel]):
             print(' '.join(str(int(cell)) for cell in row))
-
 
     def dump_ogm_graphs(self, grid):
         for channel in range(self.channels):

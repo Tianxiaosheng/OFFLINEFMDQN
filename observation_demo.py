@@ -18,35 +18,19 @@ def main():
     train = False
     # Initialize agent
     agent = DQNAgent(net_kwargs, gamma, epsilon, batch_size,\
-                     observation_dim=(4, 51, 101), action_size=3,
+                     observation_dim=(3, 51, 101), action_size=3,
                      offline_RL_data_path=file_path)
 
     # Load UOS's deserialization data to replay memory
     agent.load_replay_memory()
 
-    # get model's parameters from training or load from saved model
-    if train:
-        for epoch in range(num_epochs_training):
-            start_time = time.time()
-            play_qlearning(agent, train, render=True)
-            end_time = time.time()
-            print("epoch {} train time: {}".format(epoch, end_time - start_time))
-        # save nn model
-        agent.save_model_params()
-
-    else:
-        agent.load_model_params()
-
-    # frame = 125
-    # replay_memory = agent.replay_memory.get_frame(frame)
-    # print("frame: {}, action: {}, agent->action: {}".format(frame, replay_memory.action, agent.decide(replay_memory.state)))
-    # agent.ogm.dump_ogm_graphs(replay_memory.state)
-    # agent.replay_memory.print_frame(frame)
-
     for frame, replay_memory in enumerate(agent.replay_memory.memory):
-        if (frame == 300):
-            print("frame: {}, action: {}, agent->action: {}".format(frame, replay_memory.action, agent.decide(replay_memory.state)))
-            agent.ogm.dump_ogm_graphs(replay_memory.state)
+        if (frame > 600 and frame < 2000):
+            reward = agent.update_reward(agent.deserialization.get_lon_decision_input_by_frame(frame))
+            agent.deserialization.dump_ego_info_by_frame(frame)
+            agent.deserialization.dump_obj_info_by_frame(frame)
+            print("action: {}, reward: {}".format(replay_memory.action, reward))
+            # agent.ogm.dump_ogm_graphs(replay_memory.state)
             # agent.ogm.dump_ogm_graphs(replay_memory.next_state)
             # agent.replay_memory.print_frame(frame)
 

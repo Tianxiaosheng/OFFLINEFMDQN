@@ -345,7 +345,7 @@ class Deserialization:
 
     def dump_ego_info_by_frame(self, frame):
         ego_info = self.get_ego_info_by_frame(frame)
-        print(f"[frame {frame}]ego_info.vel: {ego_info.vel}m/s, acc: {ego_info.prev_cmd_acc}m/s^2, ego_heading: {ego_info.pose.theta}")
+        print(f"[frame {frame}]ego_info.vel: {ego_info.vel}m/s, acc: {ego_info.prev_cmd_acc}m/s^2, max_vel: {ego_info.max_vel}m/s, ego_heading: {ego_info.pose.theta}")
 
     def dump_obj_info_by_frame(self, frame):
         obj_set = self.get_obj_set_by_frame(frame)

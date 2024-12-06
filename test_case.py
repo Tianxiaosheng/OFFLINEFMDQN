@@ -14,16 +14,16 @@ class TestCase:
             gamma=0.99,
             epsilon=0.0,
             batch_size=400,
-            observation_dim=(4, 51, 101),
+            observation_dim=(3, 51, 101),
             action_size=3
         )
         # 加载训练好的模型参数
         self.agent.load_model_params()
-        
+
     def create_basic_lon_decision_input(self):
         """创建基础的LonDecisionInputType对象"""
         lon_input = LonDecisionInputType()
-        
+
         # 设置ego基础信息
         lon_input.ego_info = EgoInfoType()
         lon_input.ego_info.pose = PoseType()
@@ -33,7 +33,7 @@ class TestCase:
         lon_input.ego_info.pose.theta = 0.0  # 自车朝向默认为x轴正方向
         lon_input.ego_info.width = 2.0
         lon_input.ego_info.length = 3.6
-        
+
         # 设置障碍物集合
         lon_input.obj_set = ObjSetType()
         lon_input.obj_set.obj_info = []
@@ -102,15 +102,18 @@ class TestCase:
     def test_velocity_cases(self):
         """测试不同车速场景"""
         print("\n=== Testing different velocity scenarios ===")
-        ego_velocities = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0]
+
+        ego_velocities = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
         ego_velocities = [vel / 3.6 for vel in ego_velocities]
         obj_dtc = 0.0  # 障碍物到交叉口的距离
-        obj_intersection_dist = 20.0  # 障碍物相对自车的实际距离
-        obj_vel = 10.0  # 固定障碍物速度
+        obj_intersection_dist = 5.4  # 障碍物相对自车的实际距离
+        obj_vel = 5.4  # 固定障碍物速度
         obj_vel = obj_vel / 3.6
         obj_y_offset = 0.0
         obj_theta = 0.0
 
+        # 收集所有结果
+        results = []
         for ego_vel in ego_velocities:
             lon_input = self.create_single_obj_case(
                 ego_vel=ego_vel,
@@ -124,21 +127,27 @@ class TestCase:
             observation = self.agent.get_observation_from_lon_decision_input(lon_input)
             self.agent.ogm.dump_ogm_graphs(observation)
             action = self.agent.decide(observation)
-            
+            results.append((ego_vel, action))
+
             print(f"\nEgo velocity: {ego_vel:.1f} m/s")
             print(f"Object velocity: {obj_vel:.1f} m/s")
-            print(f"Distance to intersection: {obj_dtc:.1f} m")
-            print(f"Distance to object: {obj_intersection_dist:.1f} m")
+            print(f"Obj Dist to intersection: {obj_dtc:.1f} m")
+            print(f"EGO Dist to intersection: {obj_intersection_dist:.1f} m")
             print(f"Object y-offset: {obj_y_offset:.1f} m")
             print(f"Object heading: {np.rad2deg(obj_theta):.1f} deg")
             print(f"Predicted action: {self._action_to_string(action)}")
+
+        # 打印结果表格
+        for ego_vel, action in results:
+            print(f"{ego_vel:^15.1f} | {self._action_to_string(action):^20}")
+
 
     def test_distance_cases(self):
         """测试不同距离场景"""
         print("\n=== Testing different distance scenarios ===")
         distances = [5.0, 10.0, 20.0, 30.0, 50.0]
         ego_vel = 10.0  # 固定自车速度
-        obj_vel = 8.0   # 固定障碍物速度
+        obj_vel = 5.4   # 固定障碍物速度
         
         for dtc in distances:
             lon_input = self.create_single_obj_case(ego_vel, obj_vel, dtc)
