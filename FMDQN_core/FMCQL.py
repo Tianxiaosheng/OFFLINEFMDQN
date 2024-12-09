@@ -267,18 +267,30 @@ class DQNAgent:
 
         return self.ogm.grid
 
+    # def get_action_from_lon_decision_inputs(self, lon_decision_inputs, frame):
+    #     if (frame < len(lon_decision_inputs)-1):
+    #         ego_info = self.deserialization.\
+    #             get_ego_info_from_lon_decision_input(lon_decision_inputs[frame+1])
+    #         if (ego_info.prev_cmd_acc > 0.3):
+    #             return 2
+    #         elif (ego_info.prev_cmd_acc < -0.5):
+    #             return 0
+    #         else:
+    #             return 1
+    #     else:
+    #         return 1
+
     def get_action_from_lon_decision_inputs(self, lon_decision_inputs, frame):
-        if (frame < len(lon_decision_inputs)-1):
-            ego_info = self.deserialization.\
-                get_ego_info_from_lon_decision_input(lon_decision_inputs[frame+1])
-            if (ego_info.prev_cmd_acc > 0.3):
-                return 2
-            elif (ego_info.prev_cmd_acc < -0.5):
-                return 0
-            else:
-                return 1
+        actions = [-3.0, -1.5, -0.5, 0.0, 0.5, 1.0]
+
+        if frame < len(lon_decision_inputs) - 1:
+            ego_info = self.deserialization.get_ego_info_from_lon_decision_input(\
+                lon_decision_inputs[frame + 1])
+            # 直接计算最接近的动作索引
+            closest_index = min(range(len(actions)), key=lambda i: abs(actions[i] - ego_info.prev_cmd_acc))
+            return closest_index
         else:
-            return 1
+            return 3  # 返回0.0对应的索引，假设0.0是默认动作
 
     def calc_safe_time_of_cross_obj(self, obj_info, ego_info):
         obj_time_to_cli =\
@@ -473,19 +485,6 @@ class DQNAgent:
             R_c = 0.0
 
         return R_e + R_c
-
-    def act(self, state, ego_init_vel, **kwargs):
-        action = self.decide(state)
-        if action == 0:
-            expt_vel = max(ego_init_vel - 1.0, 0.0)
-        elif action == 1:
-            expt_vel = ego_init_vel
-        else:
-            expt_vel = ego_init_vel + 1.0
-
-        if self.render:
-            print('init_vel:{}, action:{}, expt_vel:{}'.format(ego_init_vel, action-1, expt_vel))
-        return [expt_vel, 0], action
 
     def plot_reward(self, episode_rewards, ego_vels, gamma, epsilon, batch_size, net_kwargs={}):
         fig = plt.figure(figsize=(10, 6))  # 设置图形大小
@@ -746,7 +745,7 @@ def replay_from_memory(agent):
 
 class CQLAgent(DQNAgent):
     def __init__(self, net_kwargs={}, gamma=0.9, epsilon=0.05,
-                 batch_size=64, observation_dim=(4, 67, 133), action_size=3,
+                 batch_size=64, observation_dim=(4, 67, 133), action_size=6,
                  offline_RL_data_path=None, cql_alpha=0.01):
         super().__init__(net_kwargs, gamma, epsilon, batch_size,
                         observation_dim, action_size, offline_RL_data_path)
@@ -811,7 +810,7 @@ class CQLAgent(DQNAgent):
             # Q值过高时增加惩罚
             scale = 1.0 + torch.abs(q_mean - self.target_q_magnitude) / abs(self.target_q_magnitude)
             cql_loss = cql_loss * scale
-        
+
         # 总损失
         loss = td_loss + self.cql_alpha * cql_loss
 

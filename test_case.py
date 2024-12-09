@@ -2,20 +2,20 @@
 
 import sys
 import numpy as np
-from FMDQN_core.FMDQN import DQNAgent
+from FMDQN_core.FMCQL import CQLAgent
 from deserialization_core.deserialization import *
 
 class TestCase:
     def __init__(self):
         # 初始化DQN agent
         net_kwargs = {'hidden_sizes': [64, 64], 'learning_rate': 0.0005}
-        self.agent = DQNAgent(
+        self.agent = CQLAgent(
             net_kwargs=net_kwargs,
             gamma=0.99,
             epsilon=0.0,
             batch_size=400,
             observation_dim=(3, 51, 101),
-            action_size=3
+            action_size=6
         )
         # 加载训练好的模型参数
         self.agent.load_model_params()
@@ -67,7 +67,7 @@ class TestCase:
             obj_theta: 障碍物航向角(弧度)
         """
         lon_input = self.create_basic_lon_decision_input()
-        
+
         # 更新自车信息
         lon_input.ego_info.vel = ego_vel
         lon_input.ego_info.pose.pos.x = ego_x
@@ -78,7 +78,7 @@ class TestCase:
         lon_input.extra_info.ego_extra_info.pose.pos.x = ego_x
         lon_input.extra_info.ego_extra_info.pose.pos.y = ego_y
         lon_input.extra_info.ego_extra_info.pose.theta = ego_theta
-        
+
         # 创建障碍物信息
         obj = ObjInfoType()
         obj.id = 1
@@ -89,14 +89,14 @@ class TestCase:
         obj.length = 4.0
         obj.pose = PoseType()
         obj.pose.pos = PosType()
-        
+
         # 根据自车位置和实际距离设置障碍物位置
         obj.pose.pos.x = ego_x + obj_intersection_dist * np.cos(ego_theta)
         obj.pose.pos.y = ego_y + obj_intersection_dist * np.sin(ego_theta) + obj_y_offset
         obj.pose.theta = obj_theta
 
         lon_input.obj_set.obj_info.append(obj)
-        
+
         return lon_input
 
     def test_velocity_cases(self):
@@ -106,8 +106,8 @@ class TestCase:
         ego_velocities = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
         ego_velocities = [vel / 3.6 for vel in ego_velocities]
         obj_dtc = 0.0  # 障碍物到交叉口的距离
-        obj_intersection_dist = 5.4  # 障碍物相对自车的实际距离
-        obj_vel = 5.4  # 固定障碍物速度
+        obj_intersection_dist = 40.0  # 障碍物相对自车的实际距离
+        obj_vel = 18.0  # 固定障碍物速度
         obj_vel = obj_vel / 3.6
         obj_y_offset = 0.0
         obj_theta = 0.0
@@ -125,7 +125,7 @@ class TestCase:
                 obj_theta=obj_theta
             )
             observation = self.agent.get_observation_from_lon_decision_input(lon_input)
-            self.agent.ogm.dump_ogm_graphs(observation)
+            # self.agent.ogm.dump_ogm_graphs(observation)
             action = self.agent.decide(observation)
             results.append((ego_vel, action))
 
@@ -181,9 +181,12 @@ class TestCase:
     def _action_to_string(self, action):
         """将action数值转换为可读字符串"""
         action_map = {
-            0: "DECELERATE",
-            1: "MAINTAIN",
-            2: "ACCELERATE"
+            0: "EMERGENCY DECELERATE",
+            1: "HARD DECELERATE",
+            2: "SOFT DECELERATE",
+            3: "MAINTAIN",
+            4: "SOFT ACCELERATE",
+            5: "HARD ACCELERATE"
         }
         return action_map.get(action, "UNKNOWN")
     

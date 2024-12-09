@@ -46,7 +46,7 @@ def main(num_epochs_training, train=False):
     epsilon=0.00
     batch_size=400
     agent = CQLAgent(net_kwargs, gamma, epsilon, batch_size,\
-                     observation_dim=(3, 51, 101), action_size=3,
+                     observation_dim=(3, 51, 101), action_size=6,
                      offline_RL_data_path=file_path, cql_alpha=1.0)
 
     agent.load_replay_memory()
@@ -85,6 +85,7 @@ def main(num_epochs_training, train=False):
             if (epoch_stats['td_error'] < min_td_error):
                 min_td_error = epoch_stats['td_error']
                 agent.save_model_params()
+        agent.save_model_params()
         # 训练结束后绘制学习曲线
         plot_training_curves(training_stats, save_path=f'training_curves_{time.strftime("%Y%m%d_%H%M%S")}.png')
     else:
