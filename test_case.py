@@ -4,9 +4,11 @@ import sys
 import numpy as np
 from FMDQN_core.FMCQL import CQLAgent
 from deserialization_core.deserialization import *
+import torch
 
 class TestCase:
-    def __init__(self):
+    def __init__(self, file_path):
+        self.file_path = file_path
         # 初始化DQN agent
         net_kwargs = {'hidden_sizes': [64, 64], 'learning_rate': 0.0005}
         self.agent = CQLAgent(
@@ -15,10 +17,13 @@ class TestCase:
             epsilon=0.0,
             batch_size=400,
             observation_dim=(3, 51, 101),
-            action_size=6
+            action_size=6,
+            offline_RL_data_path=file_path,
+            cql_alpha=1.0
         )
         # 加载训练好的模型参数
         self.agent.load_model_params()
+        self.agent.load_replay_memory()
 
     def create_basic_lon_decision_input(self):
         """创建基础的LonDecisionInputType对象"""
@@ -177,7 +182,7 @@ class TestCase:
             print(f"Object velocity: {obj_vel:.1f} m/s")
             print(f"Distance to object: {obj_dtc:.1f} m")
             print(f"Predicted action: {self._action_to_string(action)}")
-    
+
     def _action_to_string(self, action):
         """将action数值转换为可读字符串"""
         action_map = {
@@ -202,11 +207,49 @@ class TestCase:
         }
         return scene_map.get(scene, "UNKNOWN")
 
+    def dump_state_action_value(self):
+        """记录每个memory中state对应的action value到文件中"""
+        print("Dumping state action values...")
+
+        # 打开文件
+        output_file = "data/state_action_values_py.txt"
+        with open(output_file, 'w') as f:
+            # 遍历所有memory中的state
+            print(f"Total frames: {len(self.agent.replay_memory)}")
+            for frame in range(len(self.agent.replay_memory)):
+                # 获取state
+                state = self.agent.replay_memory.get_frame(frame).state
+
+                # 确保state是正确的形状
+                if not isinstance(state, np.ndarray):
+                    state = np.array(state)
+                if state.ndim == 3:
+                    state = state[np.newaxis, ...]  # 添加batch维度
+
+                # 转换为tensor
+                state_tensor = torch.from_numpy(state).float().to(self.agent.device)
+
+                # 获取所有动作的Q值
+                with torch.no_grad():
+                    q_values = self.agent.evaluate_net(state_tensor)
+                    q_values = q_values.cpu().numpy().flatten()
+
+                # 写入文件
+                q_values_str = ", ".join([f"{v:.6f}" for v in q_values])
+                f.write(f"{q_values_str}\n")
+
+                if frame % 1000 == 0:
+                    print(f"Processed frame: {frame}")
+
+        print(f"State action values have been saved to {output_file}")
+
 def main():
-    test_case = TestCase()
-    
+    file_path = sys.argv[1]
+    test_case = TestCase(file_path)
+    test_case.dump_state_action_value()
+
     # 运行所有测试用例
-    test_case.test_velocity_cases()
+    #test_case.test_velocity_cases()
     # test_case.test_distance_cases()
     # test_case.test_scene_cases()
 

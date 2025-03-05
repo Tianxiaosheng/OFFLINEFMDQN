@@ -139,6 +139,7 @@ class Deserialization:
 
         end_time = time.time()
         print(f"Time taken to get lon decision inputs: {end_time - start_time} seconds")
+        print(f"lon_decision_inputs size: {len(self.lon_decision_inputs)}")
 
     def convert_lon_decision_input_to_type(self, lon_decision_input):
         # 预创建对象,减少重复创建

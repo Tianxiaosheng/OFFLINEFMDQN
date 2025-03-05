@@ -38,6 +38,5 @@ def main():
     print("len(replay_memory): ", len(agent.replay_memory))
 
 
-
 if __name__ == "__main__":
     main()

@@ -230,8 +230,23 @@ class DQNAgent:
         if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_n)
 
-        state = torch.tensor(observation, dtype=torch.float).to(self.device)
-        action = torch.argmax(self.evaluate_net(state)).item()
+        # 确保observation是numpy数组
+        if not isinstance(observation, np.ndarray):
+            observation = np.array(observation)
+
+        # 添加batch维度和channel维度(如果需要)
+        if observation.ndim == 3:  # 如果已经是[C,H,W]格式
+            observation = observation[np.newaxis, ...]  # 变成[1,C,H,W]
+        elif observation.ndim == 2:  # 如果是[H,W]格式
+            observation = observation[np.newaxis, np.newaxis, ...]  # 变成[1,1,H,W]
+
+        # 转换为tensor
+        state = torch.from_numpy(observation).float().to(self.device)
+
+        # 获取动作
+        with torch.no_grad():
+            q_values = self.evaluate_net(state)
+            action = torch.argmax(q_values).item()
 
         return action
 
@@ -529,6 +544,13 @@ class DQNAgent:
     def save_model_params(self):
         torch.save(self.evaluate_net.state_dict(), EVA_PATH)
         torch.save(self.target_net.state_dict(), TARGET_PATH)
+        # # 使用旧版本的序列化格式保存模型
+        # torch.save(self.evaluate_net.state_dict(),
+        #           EVA_PATH,
+        #           _use_new_zipfile_serialization=False)
+        # torch.save(self.target_net.state_dict(),
+        #           TARGET_PATH,
+        #           _use_new_zipfile_serialization=False)
 
     def load_model_params(self):
         self.evaluate_net.load_state_dict(torch.load(EVA_PATH))
