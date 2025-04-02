@@ -48,6 +48,12 @@ class DQNReplayer:
         # args = (1, 2, 3, 4, 5)
         self.memory.append(self.Transition(*args))
 
+    def get(self, frame):
+        if frame < len(self.memory):
+            return self.memory[frame]
+        else:
+            return -1
+
     def __len__(self):
         return len(self.memory)
 
@@ -250,6 +256,27 @@ class DQNAgent:
 
         return action
 
+    def dump_ego_state(self, lon_decision_input):
+        ego_pos = self.deserialization.get_ego_position_from_lon_decision_input(lon_decision_input)
+        ego_pos = [ego_pos.x, ego_pos.y]
+        ego_heading = self.deserialization.get_ego_heading_from_lon_decision_input(lon_decision_input)
+        width = self.deserialization.get_ego_width_from_lon_decision_input(lon_decision_input)
+        length = self.deserialization.get_ego_length_from_lon_decision_input(lon_decision_input)
+        ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input(lon_decision_input)
+
+        print(f"ego->x:: {ego_pos[0]}, ego->y:: {ego_pos[1]}, theta: {ego_heading}, vel: {ego_vel}, width: {width}, length: {length}")
+
+    def dump_obj_set(self, lon_decision_input):
+        for obj_info in lon_decision_input.obj_set.obj_info:
+            obj_pos = self.deserialization.get_obj_position_from_obj_info(obj_info)
+            obj_pos = [obj_pos.x, obj_pos.y]
+            obj_heading = self.deserialization.get_obj_heading_from_obj_info(obj_info)
+            width = self.deserialization.get_obj_width_from_obj_info(obj_info)
+            length = self.deserialization.get_obj_length_from_obj_info(obj_info)
+            obj_vel = self.deserialization.get_obj_vel_from_obj_info(obj_info)
+            obj_dtc = self.deserialization.get_obj_dtc_from_obj_info(obj_info)
+            print(f"obj->x:: {obj_pos[0]}, obj->y:: {obj_pos[1]}, theta: {obj_heading}, vel: {obj_vel}, width: {width}, length: {length}, dtc: {obj_dtc}")
+
     def get_observation_from_lon_decision_input(self, lon_decision_input):
         ego_pos = self.deserialization.get_ego_position_from_lon_decision_input(lon_decision_input)
         ego_pos = [ego_pos.x, ego_pos.y]
@@ -282,21 +309,19 @@ class DQNAgent:
 
         return self.ogm.grid
 
-    # def get_action_from_lon_decision_inputs(self, lon_decision_inputs, frame):
-    #     if (frame < len(lon_decision_inputs)-1):
-    #         ego_info = self.deserialization.\
-    #             get_ego_info_from_lon_decision_input(lon_decision_inputs[frame+1])
-    #         if (ego_info.prev_cmd_acc > 0.3):
-    #             return 2
-    #         elif (ego_info.prev_cmd_acc < -0.5):
-    #             return 0
-    #         else:
-    #             return 1
-    #     else:
-    #         return 1
+    def get_action_from_lon_decision_input(self, lon_decision_input):
+        ego_info = self.deserialization.\
+            get_ego_info_from_lon_decision_input(lon_decision_input)
+        if (ego_info.prev_cmd_acc > 0.3):
+            return 2
+        elif (ego_info.prev_cmd_acc < -0.5):
+            return 0
+        else:
+            return 1
 
     def get_action_from_lon_decision_inputs(self, lon_decision_inputs, frame):
-        actions = [-3.0, -1.5, -0.5, 0.0, 0.5, 1.0]
+        # actions = [-3.0, -1.5, -0.5, 0.0, 0.5, 1.0]
+        actions = [-3.0, -1.0, -0.2, 0.0, 0.2, 0.5]
 
         if frame < len(lon_decision_inputs) - 1:
             ego_info = self.deserialization.get_ego_info_from_lon_decision_input(\
@@ -415,13 +440,13 @@ class DQNAgent:
         return payoff_of_comfort
 
     def update_payoff_of_efficiency(self, lon_decision_input):
-        k_e = 10
+        k_e = 20
 
         ego_vel = self.deserialization.get_ego_vel_from_lon_decision_input\
                 (lon_decision_input)
         ego_target_vel = self.deserialization.get_ego_max_vel_from_lon_decision_input\
                 (lon_decision_input)
-        ego_target_vel = 30 / 3.6
+        ego_target_vel = 20 / 3.6
         if (ego_target_vel > 0.0):
             payoff_of_efficiency = -k_e * pow(abs(ego_vel - ego_target_vel) / ego_target_vel, 2)
         else:
@@ -444,6 +469,11 @@ class DQNAgent:
             action = self.get_action_from_lon_decision_inputs(lon_decision_inputs, frame-1)
             reward = self.update_reward(lon_decision_inputs[frame-1])
             done = False
+
+            ego_info = self.deserialization.get_ego_info_from_lon_decision_input(\
+                lon_decision_inputs[frame-1])
+            if ego_info.vel == 0 and ego_info.prev_cmd_acc <= 0:
+                continue
             self.replay_memory.push(state, action, reward, next_state, done)
             state = next_state
 
@@ -774,7 +804,7 @@ class CQLAgent(DQNAgent):
         # CQL特有参数
         self.cql_alpha = cql_alpha
         # 根据reward范围设置目标Q值量级
-        self.target_q_magnitude = -200.0  # 设置为reward范围的10%左右
+        self.target_q_magnitude = -20.0  # 设置为reward范围的10%左右
         self.min_q_value = -2000.0  # reward最小值
         self.max_q_value = 0.0      # reward最大值
         # 初始化Q值统计信息
@@ -878,14 +908,14 @@ class CQLAgent(DQNAgent):
 
         if current_q_mean < self.target_q_magnitude:
             # Q值过低时，减小alpha允许Q值上升
-            self.cql_alpha = self.cql_alpha / (1.0 + ratio)
+            self.cql_alpha = self.cql_alpha / (2.0 + ratio)
         else:
             # Q值过高时，增大alpha压低Q值
-            self.cql_alpha = self.cql_alpha * (1.0 + ratio)
+            self.cql_alpha = self.cql_alpha * (2.0 + ratio)
 
         # 根据实际reward范围调整alpha的限制范围
         alpha_min = 0.01
-        alpha_max = 0.5  # 降低上限以避免过度压制
+        alpha_max = 5.0  # 降低上限以避免过度压制
         self.cql_alpha = max(alpha_min, min(alpha_max, self.cql_alpha))
         
         return self.cql_alpha

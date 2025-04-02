@@ -2,7 +2,7 @@
 
 import sys
 import numpy as np
-from FMDQN_core.FMCQL import CQLAgent
+from FMDQN_core.FMCQL import CQLAgent, replay_from_memory
 from deserialization_core.deserialization import *
 import torch
 
@@ -23,7 +23,8 @@ class TestCase:
         )
         # 加载训练好的模型参数
         self.agent.load_model_params()
-        self.agent.load_replay_memory()
+        # 反序列化，从udpf中得到原始数据
+        self.agent.deserialization.get_lon_decision_inputs_by_deserialization()
 
     def create_basic_lon_decision_input(self):
         """创建基础的LonDecisionInputType对象"""
@@ -63,7 +64,7 @@ class TestCase:
             ego_vel: 自车速度
             obj_vel: 障碍物速度
             obj_dtc: 障碍物到交叉口的距离(用于特征图dtc图层)
-            obj_intersection_dist: 障碍物相对自车的实际距离(用于确定障碍物位置)
+            obj_intersection_dist: 障碍物相对自车的纵向距离(用于确定障碍物位置)
             obj_scene: 场景类型
             ego_x: 自车x坐标
             ego_y: 自车y坐标
@@ -100,7 +101,7 @@ class TestCase:
         obj.pose.pos.y = ego_y + obj_intersection_dist * np.sin(ego_theta) + obj_y_offset
         obj.pose.theta = obj_theta
 
-        lon_input.obj_set.obj_info.append(obj)
+        # lon_input.obj_set.obj_info.append(obj)
 
         return lon_input
 
@@ -108,10 +109,10 @@ class TestCase:
         """测试不同车速场景"""
         print("\n=== Testing different velocity scenarios ===")
 
-        ego_velocities = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+        ego_velocities = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
         ego_velocities = [vel / 3.6 for vel in ego_velocities]
         obj_dtc = 0.0  # 障碍物到交叉口的距离
-        obj_intersection_dist = 40.0  # 障碍物相对自车的实际距离
+        obj_intersection_dist = 20.0  # 障碍物相对自车的实际距离
         obj_vel = 18.0  # 固定障碍物速度
         obj_vel = obj_vel / 3.6
         obj_y_offset = 0.0
@@ -146,24 +147,26 @@ class TestCase:
         for ego_vel, action in results:
             print(f"{ego_vel:^15.1f} | {self._action_to_string(action):^20}")
 
-
     def test_distance_cases(self):
         """测试不同距离场景"""
         print("\n=== Testing different distance scenarios ===")
-        distances = [5.0, 10.0, 20.0, 30.0, 50.0]
+        # distances = [5.0, 10.0, 20.0, 30.0, 50.0]
+        distances = [0.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 40.0, 50.0]
         ego_vel = 10.0  # 固定自车速度
         obj_vel = 5.4   # 固定障碍物速度
-        
-        for dtc in distances:
-            lon_input = self.create_single_obj_case(ego_vel, obj_vel, dtc)
+        dtc = 0.0
+
+        for obj_intersection_dist in distances:
+            lon_input = self.create_single_obj_case(ego_vel, obj_vel, dtc,
+                                                    obj_intersection_dist, 0.0, 0.0, 0.0)
             observation = self.agent.get_observation_from_lon_decision_input(lon_input)
             action = self.agent.decide(observation)
-            
+
             print(f"\nEgo velocity: {ego_vel:.1f} m/s")
             print(f"Object velocity: {obj_vel:.1f} m/s")
-            print(f"Distance to object: {dtc:.1f} m")
+            print(f"Distance to object: {obj_intersection_dist:.1f} m")
             print(f"Predicted action: {self._action_to_string(action)}")
-    
+
     def test_scene_cases(self):
         """测试不同场景类型"""
         print("\n=== Testing different scene scenarios ===")
@@ -211,6 +214,8 @@ class TestCase:
         """记录每个memory中state对应的action value到文件中"""
         print("Dumping state action values...")
 
+        self.agent.load_replay_memory()
+
         # 打开文件
         output_file = "data/state_action_values_py.txt"
         with open(output_file, 'w') as f:
@@ -219,6 +224,9 @@ class TestCase:
             for frame in range(len(self.agent.replay_memory)):
                 # 获取state
                 state = self.agent.replay_memory.get_frame(frame).state
+
+                if frame == 5000:
+                    self.agent.ogm.save_ogm_graphs(state)
 
                 # 确保state是正确的形状
                 if not isinstance(state, np.ndarray):
@@ -243,15 +251,70 @@ class TestCase:
 
         print(f"State action values have been saved to {output_file}")
 
+    def single_frame_test(self, frame_idx):
+        """测试单个frame的action value"""
+        lon_input = self.agent.deserialization.get_lon_decision_input_by_frame(frame_idx)
+        observation = self.agent.get_observation_from_lon_decision_input(lon_input)
+        # self.agent.ogm.dump_ogm_graphs(observation)
+
+        # # self.agent.ogm.save_ogm_graphs(observation)
+
+        # self.agent.dump_ego_state(self.agent.deserialization.get_lon_decision_input_by_frame(frame_idx))
+        # self.agent.dump_obj_set(self.agent.deserialization.get_lon_decision_input_by_frame(frame_idx))
+
+        action = self.agent.decide(observation)
+        print(f"Predicted action: {self._action_to_string(action)}, \
+              prev_acc: {self.agent.deserialization.get_ego_acc_from_lon_decision_input(lon_input)}, \
+                ego_vel: {self.agent.deserialization.get_ego_vel_from_lon_decision_input(lon_input)}, \
+                    obj_size: {len(self.agent.deserialization.get_obj_set_by_frame(frame_idx).obj_info)}")
+
+    def single_frame_traj_test(self, frame_idx):
+        """测试指定frame的S/A/R/S value"""
+        # 1. 利用原始数据，填充replay_memory. 得到由{S, A, R, S', D}组成的trajs
+        self.agent.fill_replay_memory(self.agent.deserialization.get_lon_decision_inputs())
+
+        # 2.1 获取指定帧的原始数据，并进行打印
+        lon_input = self.agent.deserialization.get_lon_decision_input_by_frame(frame_idx)
+        self.agent.dump_ego_state(lon_input)
+        self.agent.dump_obj_set(lon_input)
+
+        # 2.2 从replay_memory中，获取指定帧的traj
+        traj = self.agent.replay_memory.get(frame_idx)
+
+        # 2.2.1 获取特定帧的S，并进行打印
+        self.agent.ogm.dump_ogm_graphs(traj.state)
+
+        # 2.2.2 获取特定帧的A，并进行打印
+        action = traj.action
+        print('action:%s' % (action))
+
+        # 2.2.3 获取特定帧的R，并进行打印
+        reward = traj.reward
+        print('reward:%s' % (reward))
+
+        # 2.2.2 获取特定帧的S'，并进行打印
+        self.agent.ogm.dump_ogm_graphs(traj.next_state)
+
+        # 2.1 获取指定帧的下一帧原始数据，并进行打印
+        lon_input = self.agent.deserialization.get_lon_decision_input_by_frame(frame_idx+1)
+        self.agent.dump_ego_state(lon_input)
+        self.agent.dump_obj_set(lon_input)
+
 def main():
+    # 1. test case agent construction process
     file_path = sys.argv[1]
     test_case = TestCase(file_path)
-    test_case.dump_state_action_value()
 
+    # 2. sub case test process
+    #test_case.dump_state_action_value()
+    for i in range(1000):
+        test_case.single_frame_test(i)
     # 运行所有测试用例
-    #test_case.test_velocity_cases()
-    # test_case.test_distance_cases()
-    # test_case.test_scene_cases()
+    # test_case.test_velocity_cases()
+    #test_case.test_distance_cases()
+    #test_case.test_scene_cases()
+
+    #test_case.single_frame_traj_test(101)
 
 if __name__ == "__main__":
     main()

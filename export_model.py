@@ -27,23 +27,24 @@ def export_model():
     with torch.no_grad():
         original_output = agent.evaluate_net(example)
         traced_output = traced_script_module(example)
-        
+
         print("Original model output shape:", original_output.shape)
         print("Traced model output shape:", traced_output.shape)
         print("Max difference:", torch.max(torch.abs(original_output - traced_output)))
 
-    # 保存模型时使用V2版本
-    torch.jit.save(traced_script_module, "data/traced_cql_model.pt", _extra_files={
-        "_torch_jit_version": "2"  # 指定使用V2版本
-    })
-    
-    # 读取模型文件并检查版本
-    with open("data/traced_cql_model.pt", 'rb') as f:
-        # 读取前8个字节
-        magic_number = f.read(8)
-        # 读取版本号（4字节）
-        version = struct.unpack('i', f.read(4))[0]
-        print(f"Model file version: {version}")
+    # # 保存模型时使用V2版本
+    # torch.jit.save(traced_script_module, "data/traced_cql_model.pt", _extra_files={
+    #     "_torch_jit_version": "2"  # 指定使用V2版本
+    # })
+    torch.jit.save(traced_script_module, "data/traced_cql_model.pt")
+
+    # # 读取模型文件并检查版本
+    # with open("data/traced_cql_model.pt", 'rb') as f:
+    #     # 读取前8个字节
+    #     magic_number = f.read(8)
+    #     # 读取版本号（4字节）
+    #     version = struct.unpack('i', f.read(4))[0]
+    #     print(f"Model file version: {version}")
     
     print("Model exported successfully!")
 

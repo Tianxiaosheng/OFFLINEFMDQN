@@ -27,6 +27,24 @@ python observation_demo.py  data/lon_decision_input_dump.ucrf
 ```
 2.3 lon_agent.py
 lon_agent: tesing demo of feature 4
+
 ```bash
 python lon_agent.py  data/lon_decision_input_dump.ucrf-2.6w
 ```
+
+2.4 test_case.py
+
+tesing demo of feature 5
+
+```
+python test_case.py data/lon_decision_input_dump.ucrf-ideal2.3w
+```
+
+2. 5test_case.py
+
+tesing demo of feature 6
+
+```
+python export_model.py
+```
+

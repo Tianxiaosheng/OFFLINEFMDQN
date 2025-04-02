@@ -17,10 +17,10 @@ def calculate_mse(data1, data2):
 def main():
 
     # 读取数据
-    # data_a = read_data('data/state_action_values_py.txt')
-    # data_b = read_data('data/state_action_value.txt')
-    data_a = read_data('data/a.txt')
-    data_b = read_data('data/b.txt')
+    data_a = read_data('data/state_action_values_c.txt')
+    data_b = read_data('data/state_action_values_py.txt')
+    # data_a = read_data('data/a.txt')
+    # data_b = read_data('data/b.txt')
 
     # 计算MSE
     mse = calculate_mse(data_a, data_b)

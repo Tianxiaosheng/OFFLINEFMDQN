@@ -1,6 +1,14 @@
 import math
 import numpy as np
 
+def is_equal(x, y):
+    return abs(x - y) < 1e-6
+
+def is_greater(x, y):
+    return x > y and not is_equal(x, y)
+def is_less(x, y):
+    return x < y and not is_equal(x, y)
+
 def cvt_pose_local_to_global(local_pos_x, local_pos_y, local_pos_theta,
                              base_pos_x, base_pos_y, base_pos_theta):
     global_pos_x = base_pos_x
@@ -43,7 +51,7 @@ def is_point_in_polygon(point, polygon):
         xj, yj = polygon[j]
 
         # Check if the point is on a boundary
-        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):  
+        if ((is_greater(yi, y) != is_greater(yj, y)) and is_less(x, (xj - xi) * (y - yi) / (yj - yi) + xi)):
             inside = not inside  
 
         j = i
@@ -72,7 +80,7 @@ class OccupancyGrid:
         self.heading = ego_heading % (2.0 * math.pi)
 
         # self.grid = np.zeros(self.shape_dim, dtype=float)
-        self.grid = np.full(self.shape_dim, -1.0, dtype=float)
+        self.grid = np.full(self.shape_dim, 0.0, dtype=float)
 
         if self.render:
             print("ego_x:{}, y:{}, th:{}, grid_global_x:{}, y:{}, th:{}".\
@@ -84,7 +92,6 @@ class OccupancyGrid:
         obj_center_x, obj_center_y, heading_local = \
                 cvt_pose_global_to_local(obj_center[0], obj_center[1], obj_heading,\
                                          self.center_x, self.center_y, self.heading)
-
         if self.render:
             print("obj_global->x{}, y{}, th{}, length{}, width{}, local->x{}, y{}, th{}".\
                   format(obj_center[0], obj_center[1], obj_heading, bounding_box[0], bounding_box[1],\
@@ -121,8 +128,8 @@ class OccupancyGrid:
         x_max, y_max = max(c[0] for c in rotated_corners), max(c[1] for c in rotated_corners)
 
         # Update the occupancy grid
-        for x in range(int(x_min // self.delta_x), int(x_max // self.delta_x) + 1):
-            for y in range(int(y_min // self.delta_y), int(y_max // self.delta_y) + 1):
+        for x in range(math.floor(x_min / self.delta_x), math.floor(x_max / self.delta_x) + 1):
+            for y in range(math.floor(y_min / self.delta_y), math.floor(y_max / self.delta_y) + 1):
                 if x < 0 or x >= self.width or y < 0 or y >= self.height:
                     continue
                 # Check if the current cell is within the rotated rectangle
@@ -150,3 +157,13 @@ class OccupancyGrid:
     def dump_ogm_graphs(self, grid):
         for channel in range(self.channels):
             self.dump_ogm_graph(grid, channel)
+
+    def save_ogm_graphs(self, grid):
+        file_path = "/home/uisee/Documents/my_script/offlineFMDQN/data/state_py.txt"
+        with open(file_path, 'w') as file:
+            # 遍历每个通道
+            for channel in range(self.channels):
+                # 遍历网格的每一行
+                for row in reversed(grid[channel]):
+                    # 将每个单元格的值转换为字符串并用空格分隔，然后写入文件
+                    file.write(' '.join(str(cell) for cell in row) + '\n')

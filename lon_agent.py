@@ -80,7 +80,7 @@ def main(num_epochs_training, train=False):
                 print(f"Epoch {epoch}")
                 print(f"TD Error: {epoch_stats['td_error']:.4f}")
                 print(f"Action Match Rate: {action_match_rate:.4f}")
-                print(f"Q Values - Mean: {q_stats['mean']:.4f}, Max: {q_stats['max']:.4f}")
+                print(f"Q Values -> Mean: {q_stats['mean']:.4f}, Max: {q_stats['max']:.4f}")
             # save nn model
             if (epoch_stats['td_error'] < min_td_error):
                 min_td_error = epoch_stats['td_error']
