@@ -76,7 +76,7 @@ class DQNReplayer:
 # 定义DQN网络结构
 class FMDQNNet(nn.Module):
     def __init__(self, input_dim=(4, 67, 133), conv_param={'filter1_size': 6, 'filter2_size': 16,
-                                                          'filter_width': 3, 'pad': 0, 'stride': 1},
+                                                          'filter_width': 5, 'pad': 0, 'stride': 1},
                                 hidden1_size=128, hidden2_size=32, output_size=3):
         super(FMDQNNet, self).__init__()
         self.input_dim = input_dim

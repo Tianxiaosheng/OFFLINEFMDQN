@@ -9,42 +9,43 @@
 
 
 ## Usage
-1. Install the dependencies
-```bash
-pip install -r requirements.txt
-```
 
-2. Run the script
-2.1 deserialization_demo.py
+1. Run the script
+
+1.1 deserialization_demo.py
 deserialization: tesing demo of feature 1 and 2
 ```bash
 python deserialization_demo.py  data/lon_decision_input_dump.ucrf
+```
 
-2.2 observation_demo.py
+1.2 observation_demo.py
 observation: tesing demo of feature 3
 ```bash
 python observation_demo.py  data/lon_decision_input_dump.ucrf
 ```
-2.3 lon_agent.py
+1.3 lon_agent.py
 lon_agent: tesing demo of feature 4
 
 ```bash
 python lon_agent.py  data/lon_decision_input_dump.ucrf-2.6w
 ```
 
-2.4 test_case.py
+![收敛效果](training_curves_20241209_220835.png)
+
+
+1.4 test_case.py
 
 tesing demo of feature 5
 
-```
+```bash
 python test_case.py data/lon_decision_input_dump.ucrf-ideal2.3w
 ```
 
-2. 5test_case.py
+1.5 export_model.py
 
 tesing demo of feature 6
 
-```
+```bash
 python export_model.py
 ```
 
